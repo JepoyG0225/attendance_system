@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:  #00c853;
+      --yellow: #ffd600;
+      --red:    #ff1744;
+      --blue:   #2979ff;
+      --card-bg: rgba(255,255,255,0.06);
+    }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
+      background: #0a0e1a;
+      color: #fff;
+      user-select: none;
+    }
+
+    /* ── Header bar ─────────────────────────────────────────────────────── */
+    #header {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 28px;
+      background: rgba(10,14,26,0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      z-index: 10;
+    }
+    #header-left { display: flex; flex-direction: column; gap: 2px; }
+    #school-name { font-size: 1.05rem; font-weight: 700; color: #fff; letter-spacing: .02em; }
+    #scanner-label {
+      font-size: .78rem; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: rgba(255,255,255,.5);
+    }
+    #header-right { text-align: right; }
+    #clock-date { font-size: .78rem; color: rgba(255,255,255,.5); }
+    #clock-time { font-size: 1.4rem; font-weight: 700; letter-spacing: .04em; color: #fff; }
+
+    /* ── Main stage ─────────────────────────────────────────────────────── */
+    #stage {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding-top: 70px;
+    }
+
+    /* ── Idle screen ────────────────────────────────────────────────────── */
+    #idle {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 32px;
+      transition: opacity .4s;
+    }
+
+    /* Logo circle with ripple waves */
+    .logo-circle-wrapper {
+      position: relative;
+      width: 240px; height: 240px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-wave {
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      border: 2px solid rgba(41,121,255,.35);
+      animation: ripple 2.6s ease-out infinite;
+    }
+    .logo-wave:nth-child(2) { animation-delay: .85s; }
+    .logo-wave:nth-child(3) { animation-delay: 1.7s; }
+    @keyframes ripple {
+      0%   { transform: scale(.88); opacity: .9; }
+      100% { transform: scale(1.75); opacity: 0; }
+    }
+    .logo-circle {
+      position: relative; z-index: 1;
+      width: 240px; height: 240px;
+      border-radius: 50%;
+      background: transparent;
+      border: 3px solid rgba(255,255,255,.18);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(41,121,255,.18), 0 0 120px rgba(41,121,255,.08);
+    }
+    .logo-circle img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+
+    #idle-school {
+      font-size: 1.25rem; font-weight: 700; letter-spacing: .04em;
+      color: rgba(255,255,255,.85); text-align: center;
+      text-transform: uppercase;
+    }
+    #idle-text {
+      font-size: 1.2rem; font-weight: 300; letter-spacing: .1em;
+      color: rgba(255,255,255,.5); text-transform: uppercase;
+      margin-top: -12px;
+    }
+    #idle-sub {
+      font-size: .82rem; color: rgba(255,255,255,.25); letter-spacing: .06em;
+      margin-top: -18px;
+    }
+
+    /* ── Scan result card — square ──────────────────────────────────────── */
+    #result {
+      display: none;
+      width: min(400px, 92vw);
+      background: var(--card-bg);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 28px;
+      backdrop-filter: blur(20px);
+      overflow: hidden;
+      animation: slideUp .35s cubic-bezier(.22,1,.36,1);
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(40px) scale(.96); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);   }
+    }
+
+    /* colour accent bar at top */
+    #result-accent {
+      height: 5px;
+      background: var(--green);
+      transition: background .3s;
+    }
+    #result-accent.late    { background: var(--yellow); }
+    #result-accent.timeout { background: var(--blue); }
+    #result-accent.error   { background: var(--red); }
+
+    /* single column body */
+    #result-body {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 28px 28px 24px;
+      gap: 0;
+    }
+
+    /* ── Photo ──────────────────────────────────────────────────────────── */
+    #student-photo {
+      width: 180px; height: 180px;
+      border-radius: 16px;
+      object-fit: cover;
+      border: 3px solid rgba(255,255,255,.18);
+      background: #1a2035;
+      margin-bottom: 18px;
+    }
+    #student-initials {
+      display: none;
+      width: 180px; height: 180px;
+      border-radius: 16px;
+      background: linear-gradient(135deg,#1e3a8a,#2979ff);
+      align-items: center; justify-content: center;
+      font-size: 4rem; font-weight: 800; color: #fff;
+      border: 3px solid rgba(255,255,255,.18);
+      margin-bottom: 18px;
+    }
+
+    /* ── Name & grade ───────────────────────────────────────────────────── */
+    #student-name {
+      font-size: 1.55rem; font-weight: 800;
+      line-height: 1.15; color: #fff;
+      letter-spacing: -.01em;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    #student-grade-badge {
+      font-size: .78rem; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.14);
+      color: rgba(255,255,255,.75);
+      padding: 4px 14px; border-radius: 20px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Divider ────────────────────────────────────────────────────────── */
+    .card-divider {
+      width: 100%; height: 1px;
+      background: rgba(255,255,255,.08);
+      margin-bottom: 18px;
+    }
+
+    /* ── Attendance info ────────────────────────────────────────────────── */
+    #action-row {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    #action-badge {
+      font-size: .82rem; font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; padding: 6px 18px; border-radius: 30px;
+    }
+    #action-badge.time-in  { background: rgba(0,200,83,.18);  color: var(--green);  border: 2px solid var(--green); }
+    #action-badge.time-out { background: rgba(41,121,255,.18); color: var(--blue);   border: 2px solid var(--blue);  }
+    #action-badge.error    { background: rgba(255,23,68,.18);  color: var(--red);    border: 2px solid var(--red);   }
+    #status-badge {
+      font-size: .78rem; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; padding: 5px 14px; border-radius: 20px;
+    }
+    #status-badge.present { background: rgba(0,200,83,.12);  color: var(--green); }
+    #status-badge.late    { background: rgba(255,214,0,.12);  color: var(--yellow);}
+    #status-badge.timeout { background: rgba(41,121,255,.12); color: var(--blue);  }
+
+    #time-display {
+      font-size: 2.8rem; font-weight: 200;
+      color: rgba(255,255,255,.92); letter-spacing: .06em;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    #time-label {
+      font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+      color: rgba(255,255,255,.32); text-align: center;
+      margin-bottom: 16px;
+    }
+
+    #sms-row {
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      font-size: .78rem; color: rgba(255,255,255,.38);
+    }
+    #sms-icon { font-size: .9rem; }
+
+    /* ── Error / unknown card ───────────────────────────────────────────── */
+    #error-screen {
+      display: none;
+      flex-direction: column; align-items: center; gap: 16px;
+      animation: fadeIn .3s ease;
+    }
+    @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+    #error-icon { font-size: 4rem; }
+    #error-msg  { font-size: 1.3rem; font-weight: 600; color: var(--red); text-align: center; }
+    #error-sub  { font-size: .9rem; color: rgba(255,255,255,.35); text-align: center; }
+
+    /* ── Countdown bar ──────────────────────────────────────────────────── */
+    #countdown-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 4px;
+      background: rgba(255,255,255,.08); display: none;
+    }
+    #countdown-fill {
+      height: 100%; background: rgba(255,255,255,.3);
+      transition: width linear;
+    }
+
+    /* ── Hidden RFID input ──────────────────────────────────────────────── */
+    #rfid-input {
+      position: fixed; top: -9999px; left: -9999px;
+      opacity: 0; width: 1px; height: 1px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div id="header-left">
+    <div id="school-name">Attendance System</div>
+    <div id="scanner-label">Scanner —</div>
+  </div>
+  <div id="header-right">
+    <div id="clock-date"></div>
+    <div id="clock-time"></div>
+  </div>
+</div>
+
+<!-- Stage -->
+<div id="stage">
+
+  <!-- Idle -->
+  <div id="idle">
+    <div class="logo-circle-wrapper">
+      <div class="logo-wave"></div>
+      <div class="logo-wave"></div>
+      <div class="logo-wave"></div>
+      <div class="logo-circle">
+        <img src="/static/logo.png" alt="School Logo" />
+      </div>
+    </div>
+    <div id="idle-school"></div>
+    <div id="idle-text">Scan Your ID Card</div>
+    <div id="idle-sub">Place your RFID card near the reader</div>
+  </div>
+
+  <!-- Scan result -->
+  <div id="result">
+    <div id="result-accent"></div>
+    <div id="result-body">
+      <img id="student-photo" src="" alt="" />
+      <div id="student-initials"></div>
+      <div id="student-name"></div>
+      <div id="student-grade-badge"></div>
+      <div class="card-divider"></div>
+      <div id="action-row">
+        <div id="action-badge"></div>
+        <div id="status-badge"></div>
+      </div>
+      <div id="time-display"></div>
+      <div id="time-label"></div>
+      <div id="sms-row">
+        <span id="sms-icon">📱</span>
+        <span id="sms-text"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="error-screen">
+    <div id="error-icon">⚠️</div>
+    <div id="error-msg"></div>
+    <div id="error-sub">Please see the teacher or administrator.</div>
+  </div>
+
+</div>
+
+<!-- Countdown bar -->
+<div id="countdown-bar"><div id="countdown-fill" style="width:100%"></div></div>
+
+<!-- Hidden RFID input — always focused -->
+<input id="rfid-input" type="text" autocomplete="off" />
+
+<script>
+// ── URL params ────────────────────────────────────────────────────────────────
+const params    = new URLSearchParams(window.location.search);
+const SCANNER_ID    = params.get('id')     || '1';
+const SCANNER_LABEL = params.get('label')  || `Scanner ${SCANNER_ID}`;
+const USE_PREFIX    = params.get('prefix') !== 'false';  // default on
+const MY_PREFIX     = `!${SCANNER_ID}!`;                 // e.g. "!1!" or "!2!"
+const RESET_DELAY   = parseInt(params.get('delay') || '5') * 1000;
+const API = '';
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const $idle       = document.getElementById('idle');
+const $result     = document.getElementById('result');
+const $error      = document.getElementById('error-screen');
+const $rfid       = document.getElementById('rfid-input');
+const $cntBar     = document.getElementById('countdown-bar');
+const $cntFill    = document.getElementById('countdown-fill');
+
+// ── Init header ───────────────────────────────────────────────────────────────
+document.getElementById('scanner-label').textContent = SCANNER_LABEL;
+document.title = SCANNER_LABEL;
+
+// Load school name
+fetch(`${API}/status`).then(r => r.json()).then(s => {
+  document.getElementById('school-name').textContent = s.school;
+  document.getElementById('idle-school').textContent = s.school;
+}).catch(() => {});
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock-date').textContent =
+    now.toLocaleDateString('en-PH', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+  document.getElementById('clock-time').textContent =
+    now.toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── RFID input handling ───────────────────────────────────────────────────────
+// Always keep the hidden input focused (but not when user is typing elsewhere)
+document.addEventListener('click', () => $rfid.focus());
+document.addEventListener('keydown', () => $rfid.focus());
+$rfid.focus();
+
+let resetTimer = null;
+
+$rfid.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    let uid = $rfid.value.trim();
+    $rfid.value = '';
+
+    if (!uid) return;
+
+    // ── Dual scanner prefix filtering ───────────────────────────────────
+    // If prefix mode is ON and UID starts with another scanner's prefix → ignore
+    // If UID starts with MY prefix → strip it and process
+    // If UID has no prefix → process anyway (single-scanner or no prefix configured)
+    if (USE_PREFIX) {
+      if (uid.startsWith(MY_PREFIX)) {
+        uid = uid.slice(MY_PREFIX.length);
+      } else if (/^!\d+!/.test(uid)) {
+        // Has a different scanner's prefix — ignore this scan
+        return;
+      }
+      // No prefix at all → accept (fallback for readers not configured with prefix)
+    }
+
+    if (uid) submitScan(uid);
+  }
+});
+
+// ── Submit scan ───────────────────────────────────────────────────────────────
+async function submitScan(uid) {
+  clearTimeout(resetTimer);
+  try {
+    const data = await fetch(`${API}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rfid_uid: uid, scanner_id: SCANNER_ID }),
+    }).then(r => r.json());
+
+    if (data.success && data.student) {
+      showStudent(data);
+    } else {
+      showError(data.message || 'Unknown error');
+    }
+  } catch(e) {
+    showError('Cannot reach server. Check connection.');
+  }
+  $rfid.focus();
+}
+
+// ── Show student result ───────────────────────────────────────────────────────
+function showStudent(data) {
+  const s   = data.student;
+  const att = data.attendance;
+  const action = data.action; // "time_in" | "time_out" | "already_complete"
+
+  // Photo or initials
+  const photoEl    = document.getElementById('student-photo');
+  const initialsEl = document.getElementById('student-initials');
+  if (s.photo_path) {
+    photoEl.src = s.photo_path;
+    photoEl.style.display = 'block';
+    initialsEl.style.display = 'none';
+    photoEl.onerror = () => {
+      photoEl.style.display = 'none';
+      initialsEl.style.display = 'flex';
+    };
+  } else {
+    photoEl.style.display = 'none';
+    initialsEl.style.display = 'flex';
+    initialsEl.textContent = s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  }
+
+  // Grade badge
+  const gradeSec = [s.grade, s.section].filter(Boolean).join(' — ');
+  document.getElementById('student-grade-badge').textContent = gradeSec || 'No section';
+
+  // Name
+  document.getElementById('student-name').textContent = s.full_name;
+
+  // Action badge
+  const actionBadge = document.getElementById('action-badge');
+  const actionMap = {
+    am_in:    { text: 'MORNING IN',      cls: 'time-in'  },
+    am_out:   { text: 'MORNING OUT',     cls: 'time-out' },
+    pm_in:    { text: 'AFTERNOON IN',    cls: 'time-in'  },
+    pm_out:   { text: 'AFTERNOON OUT',   cls: 'time-out' },
+    complete: { text: 'ALREADY COMPLETE',cls: 'time-out' },
+  };
+  const actionInfo = actionMap[action] || { text: action?.toUpperCase(), cls: 'time-in' };
+  actionBadge.textContent = actionInfo.text;
+  actionBadge.className   = actionInfo.cls;
+
+  // Status badge
+  const statusBadge = document.getElementById('status-badge');
+  const status = att?.status || 'present';
+  const statusMap = { present: 'PRESENT', late: 'LATE ⚠', absent: 'ABSENT', excused: 'EXCUSED' };
+  statusBadge.textContent = statusMap[status] || status.toUpperCase();
+  statusBadge.className = status === 'late' ? 'late' : (action?.includes('out') ? 'timeout' : 'present');
+
+  // Accent bar colour
+  const accent = document.getElementById('result-accent');
+  accent.className = status === 'late' ? 'late' : (action?.includes('out') ? 'timeout' : '');
+
+  // Time — pick the relevant time field based on action
+  const timeFields = { am_in: 'am_time_in', am_out: 'am_time_out', pm_in: 'pm_time_in', pm_out: 'pm_time_out' };
+  const timeVal = att?.[timeFields[action]];
+  document.getElementById('time-display').textContent = timeVal
+    ? formatTime(timeVal) : new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit'});
+  const timeLabels = { am_in: 'MORNING ARRIVAL', am_out: 'MORNING DISMISSAL', pm_in: 'AFTERNOON ARRIVAL', pm_out: 'AFTERNOON DISMISSAL' };
+  document.getElementById('time-label').textContent = timeLabels[action] || 'RECORDED';
+
+  // SMS
+  document.getElementById('sms-icon').textContent = data.sms_sent ? '📱' : '📵';
+  document.getElementById('sms-text').textContent = data.sms_sent
+    ? `SMS sent to ${s.parent_name}`
+    : 'SMS not sent (simulation mode)';
+
+  showScreen('result');
+  scheduleReset();
+}
+
+// ── Show error ─────────────────────────────────────────────────────────────────
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  showScreen('error');
+  scheduleReset(3000);
+}
+
+// ── Screen transitions ─────────────────────────────────────────────────────────
+function showScreen(which) {
+  $idle.style.display   = 'none';
+  $result.style.display = 'none';
+  $error.style.display  = 'none';
+
+  if (which === 'idle')   { $idle.style.display = 'flex'; }
+  if (which === 'result') { $result.style.display = 'block'; }
+  if (which === 'error')  { $error.style.display = 'flex'; }
+}
+
+function scheduleReset(delay = RESET_DELAY) {
+  // Countdown bar
+  $cntBar.style.display = 'block';
+  $cntFill.style.transition = 'none';
+  $cntFill.style.width = '100%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      $cntFill.style.transition = `width ${delay}ms linear`;
+      $cntFill.style.width = '0%';
+    });
+  });
+
+  resetTimer = setTimeout(() => {
+    showScreen('idle');
+    $cntBar.style.display = 'none';
+  }, delay);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatTime(t) {
+  // t is "HH:MM:SS" from API
+  const [h, m] = t.split(':');
+  const hour = parseInt(h);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
+
+// ── Start on idle ─────────────────────────────────────────────────────────────
+showScreen('idle');
+$rfid.focus();
+</script>
+</body>
+</html>
