@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Attendance System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue:   #1a73e8;
+      --green:  #1e8c45;
+      --red:    #d93025;
+      --yellow: #f9ab00;
+      --gray:   #5f6368;
+      --light:  #f8f9fa;
+      --border: #dadce0;
+      --card:   #ffffff;
+      --shadow: 0 1px 4px rgba(0,0,0,.12);
+    }
+    body {
+      font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
+      background: #f0f4f8;
+      color: #202124;
+      min-height: 100vh;
+    }
+    input, select, textarea, button, table, th, td, label, code, pre {
+      font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────────────── */
+    header {
+      background: var(--blue);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0,0,0,.2);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 600; }
+    header small { font-size: .8rem; opacity: .85; }
+    #sim-badge {
+      background: #fbbc04;
+      color: #202124;
+      font-size: .7rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      display: none;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-bottom: 20px; }
+    @media (max-width: 700px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ── Cards ────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 14px; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; }
+
+    /* ── RFID Scanner ─────────────────────────────────────────────────── */
+    #scanner-card { border-top: 4px solid var(--blue); }
+    #rfid-input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 1.1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      text-align: center;
+      letter-spacing: .15em;
+      transition: border-color .2s;
+    }
+    #rfid-input:focus { border-color: var(--blue); }
+    #rfid-input::placeholder { color: #bbb; letter-spacing: normal; font-size: .95rem; }
+    #scan-hint { text-align: center; font-size: .82rem; color: var(--gray); margin-top: 8px; }
+
+    /* ── Scan result banner ───────────────────────────────────────────── */
+    #result-banner {
+      margin-top: 16px;
+      padding: 14px 18px;
+      border-radius: 8px;
+      display: none;
+      font-size: .95rem;
+      font-weight: 500;
+    }
+    #result-banner.success { background: #e6f4ea; color: var(--green); border-left: 4px solid var(--green); }
+    #result-banner.error   { background: #fce8e6; color: var(--red);   border-left: 4px solid var(--red); }
+    #result-banner.warning { background: #fef7e0; color: #a07000;      border-left: 4px solid var(--yellow); }
+    #result-detail { font-size: .82rem; margin-top: 4px; font-weight: 400; opacity: .85; }
+
+    /* ── Stats ────────────────────────────────────────────────────────── */
+    .stat-card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .stat-card .value { font-size: 2.2rem; font-weight: 700; }
+    .stat-card .label { font-size: .8rem; color: var(--gray); text-transform: uppercase; margin-top: 4px; }
+    .stat-present .value { color: var(--green); }
+    .stat-late    .value { color: var(--yellow); }
+    .stat-absent  .value { color: var(--red); }
+
+    /* ── Date picker ──────────────────────────────────────────────────── */
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .toolbar input[type=date], .toolbar input[type=text], .toolbar select {
+      padding: 7px 11px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: .9rem;
+      outline: none;
+    }
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: .88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary   { background: var(--blue);  color: #fff; }
+    .btn-success   { background: var(--green); color: #fff; }
+    .btn-danger    { background: var(--red);   color: #fff; }
+    .btn-secondary { background: #e0e0e0; color: #333; }
+    .btn-outline {
+      background: #fff;
+      color: var(--blue);
+      border: 1px solid #c7d7ff;
+    }
+    .btn-outline:hover { background: #eef3ff; }
+
+    /* ── Tables ───────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th { background: var(--light); color: var(--gray); font-weight: 600; text-transform: uppercase; font-size: .75rem; letter-spacing: .04em; padding: 10px 12px; text-align: left; border-bottom: 2px solid var(--border); }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f5f7fa; }
+
+    /* ── Status chips ─────────────────────────────────────────────────── */
+    .chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: .75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .chip-present { background: #e6f4ea; color: var(--green); }
+    .chip-late    { background: #fef7e0; color: #a07000; }
+    .chip-absent  { background: #fce8e6; color: var(--red); }
+    .chip-excused { background: #e8eaf6; color: #3949ab; }
+    .chip-sent    { background: #e6f4ea; color: var(--green); }
+    .chip-failed  { background: #fce8e6; color: var(--red); }
+    .chip-pending { background: #fff3e0; color: #e65100; }
+    .chip-queued  { background: #fff3e0; color: #e65100; }
+
+    /* ── Tabs ─────────────────────────────────────────────────────────── */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
+    .tab {
+      padding: 10px 18px;
+      font-size: .9rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--gray);
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: color .15s;
+    }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Modal ────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.2);
+    }
+    .modal h3 { font-size: 1.1rem; margin-bottom: 18px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: .85rem; font-weight: 600; color: var(--gray); margin-bottom: 5px; }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: .92rem;
+      outline: none;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--blue); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .form-error { font-size: .8rem; color: var(--red); margin-top: 4px; display: none; }
+
+    /* ── Loading ──────────────────────────────────────────────────────── */
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: var(--blue); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading { display: none; }
+
+    /* ── Toast ────────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #323232; color: #fff;
+      padding: 12px 20px; border-radius: 8px;
+      font-size: .88rem; opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none; z-index: 200;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="school-title">Student Attendance System</h1>
+    <small id="clock"></small>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <span id="sim-badge">SIMULATION MODE</span>
+    <img src="/static/logo.png" alt="School Logo"
+      style="height:48px;width:48px;object-fit:contain;border-radius:50%;flex-shrink:0" />
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ── Tabs ──────────────────────────────────────────────────────────── -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('scanner')">Dashboard</button>
+    <button class="tab" onclick="switchTab('attendance')">Attendance</button>
+    <button class="tab" onclick="switchTab('students')">Students</button>
+    <button class="tab" onclick="switchTab('classes')">Grades &amp; Sections</button>
+    <button class="tab" onclick="switchTab('sms')">SMS Logs</button>
+    <a href="/scanner?id=1&label=Scanner+1" target="_blank" class="btn btn-primary" style="margin-left:auto;padding:7px 14px;font-size:.82rem;text-decoration:none;align-self:center">Open Scanner 1 ↗</a>
+    <a href="/scanner?id=2&label=Scanner+2" target="_blank" class="btn btn-secondary" style="padding:7px 14px;font-size:.82rem;text-decoration:none;align-self:center">Open Scanner 2 ↗</a>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB 1 — SCANNER
+  ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-scanner" class="tab-content active">
+
+    <!-- Daily stats -->
+    <div class="grid-3" id="stats-row">
+      <div class="stat-card stat-present"><div class="value" id="cnt-present">-</div><div class="label">Present</div></div>
+      <div class="stat-card stat-late">   <div class="value" id="cnt-late">-</div>   <div class="label">Late</div></div>
+      <div class="stat-card stat-absent"> <div class="value" id="cnt-absent">-</div> <div class="label">Absent</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Dashboard</h2>
+        <p style="font-size:.9rem;color:var(--gray);line-height:1.6">
+          Use this page for attendance overview, student records, classes, and SMS logs.
+          RFID scanning has been moved to dedicated scanner screens.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <a href="/scanner?id=1&label=Scanner+1" target="_blank" class="btn btn-primary" style="text-decoration:none">Open Scanner 1</a>
+          <a href="/scanner?id=2&label=Scanner+2" target="_blank" class="btn btn-secondary" style="text-decoration:none">Open Scanner 2</a>
+        </div>
+      </div>
+
+      <!-- Absent SMS Schedule -->
+      <div class="card" style="margin-bottom:20px">
+        <h2>Absent SMS Automation</h2>
+        <p style="font-size:.85rem;color:var(--gray);margin-bottom:14px">
+          The system automatically checks for absent students and sends SMS to parents at the times below.
+        </p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+          <div style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:12px 20px;text-align:center;min-width:140px">
+            <div style="font-size:.72rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.06em">Morning Check</div>
+            <div id="sched-am" style="font-size:1.5rem;font-weight:800;color:var(--blue);margin:4px 0">8:30 AM</div>
+            <div style="font-size:.75rem;color:var(--gray)">No morning scan → Absent</div>
+          </div>
+          <div style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:12px 20px;text-align:center;min-width:140px">
+            <div style="font-size:.72rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.06em">Afternoon Check</div>
+            <div id="sched-pm" style="font-size:1.5rem;font-weight:800;color:var(--blue);margin:4px 0">1:30 PM</div>
+            <div style="font-size:.75rem;color:var(--gray)">No PM return → SMS parent</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-left:auto">
+            <button class="btn btn-secondary" style="font-size:.82rem" onclick="triggerAbsentCheck('am')">▶ Run AM Check Now</button>
+            <button class="btn btn-secondary" style="font-size:.82rem" onclick="triggerAbsentCheck('pm')">▶ Run PM Check Now</button>
+          </div>
+        </div>
+        <div id="absent-check-result" style="display:none;font-size:.85rem;padding:8px 12px;border-radius:6px"></div>
+      </div>
+
+      <!-- Recent scans -->
+      <div class="card">
+        <h2>Recent Scans Today</h2>
+        <div class="table-wrap">
+          <table id="recent-table">
+            <thead><tr><th>Name</th><th>Grade</th><th>AM In</th><th>AM Out</th><th>PM In</th><th>PM Out</th><th>Status</th></tr></thead>
+            <tbody id="recent-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB 2 — ATTENDANCE
+  ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-attendance" class="tab-content">
+    <div class="card">
+      <div class="toolbar">
+        <label for="att-date" style="font-size:.9rem;font-weight:600">Date:</label>
+        <input type="date" id="att-date" />
+        <button class="btn btn-primary" onclick="loadAttendance()">Load</button>
+        <input type="text" id="att-search" placeholder="Search student name..." style="flex:1;min-width:160px" oninput="filterAttendance()" />
+        <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Grade</th><th>Section</th><th>AM In</th><th>AM Out</th><th>PM In</th><th>PM Out</th><th>Status</th><th>Notes</th><th>Action</th></tr></thead>
+          <tbody id="att-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB 3 — STUDENTS
+  ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-students" class="tab-content">
+    <div class="card">
+      <div class="toolbar">
+        <input type="text" id="student-search" placeholder="Search by name..." oninput="filterStudents()" />
+        <button class="btn btn-success" onclick="openRegisterModal()">+ Register Student</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Photo</th><th>Name</th><th>Grade</th><th>Section</th><th>Parent</th><th>Phone</th><th>RFID UID</th><th>Actions</th></tr></thead>
+          <tbody id="student-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB 4 — GRADES & SECTIONS
+  ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-classes" class="tab-content">
+    <div class="grid-2">
+
+      <!-- Grades column -->
+      <div class="card">
+        <h2>Grades</h2>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input type="text" id="new-grade-name" placeholder="e.g. Grade 1" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none" />
+          <button class="btn btn-success" onclick="addGrade()">+ Add</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Grade Name</th><th>Sections</th><th>Students</th><th>Action</th></tr></thead>
+            <tbody id="grade-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sections column -->
+      <div class="card">
+        <h2>Sections <span id="sections-grade-label" style="color:var(--blue);font-weight:400;font-size:.85rem"></span></h2>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <select id="section-grade-select" onchange="loadSections(this.value)" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none">
+            <option value="">— Select a grade —</option>
+          </select>
+          <input type="text" id="new-section-name" placeholder="e.g. Sampaguita" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none" />
+          <button class="btn btn-success" onclick="addSection()">+ Add</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Section Name</th><th>Students</th><th>Action</th></tr></thead>
+            <tbody id="section-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- School Year Promotion -->
+    <div class="card" style="margin-top:20px">
+      <h2>School Year Promotion</h2>
+      <p style="color:var(--gray);font-size:.88rem;margin-bottom:16px">Move all students from one section to another — use this when advancing students to the next grade/section at the start of a new school year.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px">
+          <label style="font-size:.8rem;font-weight:600;color:var(--gray)">FROM Section (current)</label>
+          <select id="promote-from" onchange="loadPromotePreview()" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none">
+            <option value="">— Select source section —</option>
+          </select>
+        </div>
+        <div style="font-size:1.4rem;padding-bottom:6px;color:var(--gray)">→</div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px">
+          <label style="font-size:.8rem;font-weight:600;color:var(--gray)">TO Section (target)</label>
+          <select id="promote-to" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none">
+            <option value="">— Select target section —</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="previewPromotion()">Preview</button>
+      </div>
+      <div id="promote-preview" style="display:none">
+        <div style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">
+          <div id="promote-preview-label" style="font-weight:600;margin-bottom:10px;color:var(--blue)"></div>
+          <div id="promote-preview-list" style="max-height:160px;overflow-y:auto;font-size:.88rem;color:#333;line-height:1.8"></div>
+        </div>
+        <button class="btn btn-danger" onclick="confirmPromotion()">Promote Students</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TAB 4 — SMS LOGS
+  ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-sms" class="tab-content">
+    <div class="card">
+      <h2>Recent SMS Notifications</h2>
+      <div id="modem-status" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Student</th><th>Phone</th><th>Type</th><th>Status</th><th>Modem Used</th><th>Message</th></tr></thead>
+          <tbody id="sms-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ── Register Student Modal ─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="register-modal">
+  <div class="modal">
+    <h3>Register New Student</h3>
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="f-name" placeholder="Juan dela Cruz" />
+    </div>
+    <div class="form-group">
+      <label>Grade *</label>
+      <select id="f-grade" onchange="onGradeChange(this.value)">
+        <option value="">— Select grade —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Section *</label>
+      <select id="f-section-select" disabled>
+        <option value="">— Select grade first —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Parent / Guardian Name *</label>
+      <input type="text" id="f-parent" placeholder="Maria dela Cruz" />
+    </div>
+    <div class="form-group">
+      <label>Parent Mobile Number *</label>
+      <input type="text" id="f-phone" placeholder="09171234567" maxlength="13" />
+    </div>
+    <div class="form-group">
+      <label>RFID Card UID *</label>
+      <input type="text" id="f-rfid" placeholder="Tap card on reader, or type UID manually" />
+      <small style="color:var(--gray);font-size:.78rem">Focus this field then tap the student's RFID card.</small>
+    </div>
+    <div class="form-error" id="reg-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-success" onclick="registerStudent()">Register</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Generic Confirm Modal ──────────────────────────────────────────────── -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="max-width:420px">
+    <h3 id="confirm-title" style="color:var(--red)"></h3>
+    <p id="confirm-message" style="font-size:.9rem;color:var(--gray);margin-bottom:24px;line-height:1.6"></p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="executeConfirm()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete Student Confirmation Modal ──────────────────────────────────── -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal" style="max-width:420px">
+    <h3 style="color:var(--red)">Remove Student</h3>
+    <p style="font-size:.9rem;color:var(--gray);margin-bottom:16px">
+      You are about to remove <strong id="delete-student-name"></strong> from the active list.
+      This will hide them from attendance tracking.
+    </p>
+    <div class="form-group">
+      <label>Type the student's name to confirm</label>
+      <input type="text" id="delete-confirm-input" placeholder="" oninput="checkDeleteInput()" autocomplete="off" />
+    </div>
+    <div class="form-error" id="delete-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" id="delete-confirm-btn" disabled onclick="executeDeleteStudent()">Remove Student</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input for photo upload -->
+<input type="file" id="photo-file-input" accept="image/*" style="display:none" onchange="uploadPhotoFile()" />
+
+<!-- ── Edit Student Modal ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="edit-student-modal">
+  <div class="modal">
+    <h3>Edit Student Details</h3>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px">
+      <img id="edit-photo-preview" src="" alt="Student Photo" style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid var(--border);background:var(--light)" />
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <input type="file" id="edit-photo-input" accept="image/*" style="display:none" onchange="onEditPhotoPicked()" />
+        <button class="btn btn-outline" type="button" onclick="document.getElementById('edit-photo-input').click()" style="padding:7px 12px;font-size:.82rem">Change Photo</button>
+        <small id="edit-photo-name" style="color:var(--gray);font-size:.78rem">No file selected</small>
+        <small style="color:var(--gray);font-size:.78rem">Optional: choose a new photo to upload on save.</small>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="e-name" />
+    </div>
+    <div class="form-group">
+      <label>Grade *</label>
+      <select id="e-grade" onchange="onEditGradeChange(this.value)">
+        <option value="">— Select grade —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Section *</label>
+      <select id="e-section-select" disabled>
+        <option value="">— Select grade first —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Parent / Guardian Name *</label>
+      <input type="text" id="e-parent" />
+    </div>
+    <div class="form-group">
+      <label>Parent Mobile Number *</label>
+      <input type="text" id="e-phone" maxlength="13" />
+    </div>
+    <div class="form-group">
+      <label>RFID Card UID *</label>
+      <input type="text" id="e-rfid" />
+    </div>
+    <div class="form-error" id="edit-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeEditStudentModal()">Cancel</button>
+      <button class="btn btn-success" onclick="saveStudentEdits()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Globals ───────────────────────────────────────────────────────────────────
+let allStudents  = [];
+let currentPhotoStudentId = null;
+let currentEditStudentId = null;
+let _editAllSections = [];
+const API = '';
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})
+    + '  ' + new Date().toLocaleTimeString('en-PH');
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+const TAB_NAMES = ['scanner','attendance','students','classes','sms'];
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const idx = TAB_NAMES.indexOf(name);
+  if (idx >= 0) document.querySelectorAll('.tab')[idx].classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'scanner')    { loadStats(); loadRecentScans(); }
+  if (name === 'attendance') { initAttDate(); loadAttendance(); }
+  if (name === 'students')   loadStudents();
+  if (name === 'classes')    { loadGrades(); populatePromoteSections(); }
+  if (name === 'sms')        loadSmsLogs();
+}
+
+// ── Generic confirm modal ─────────────────────────────────────────────────────
+let _confirmCallback = null;
+function showConfirmModal(title, message, onYes) {
+  _confirmCallback = onYes;
+  document.getElementById('confirm-title').textContent   = title;
+  document.getElementById('confirm-message').textContent = message;
+  document.getElementById('confirm-modal').classList.add('open');
+}
+function closeConfirmModal() {
+  document.getElementById('confirm-modal').classList.remove('open');
+  _confirmCallback = null;
+}
+async function executeConfirm() {
+  const fn = _confirmCallback;
+  closeConfirmModal();
+  if (fn) await fn();
+}
+document.getElementById('confirm-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('confirm-modal')) closeConfirmModal();
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+function chip(val) {
+  const raw = String(val || '').toLowerCase();
+  const map = {
+    pending: { cls: 'queued', label: 'QUEUED' },
+    sent: { cls: 'sent', label: 'SENT' },
+    failed: { cls: 'failed', label: 'FAILED' },
+    present: { cls: 'present', label: 'PRESENT' },
+    late: { cls: 'late', label: 'LATE' },
+    absent: { cls: 'absent', label: 'ABSENT' },
+    excused: { cls: 'excused', label: 'EXCUSED' },
+  };
+  const cfg = map[raw] || { cls: raw, label: String(val || '').toUpperCase() };
+  return `<span class="chip chip-${cfg.cls}">${cfg.label}</span>`;
+}
+
+// ── System status ─────────────────────────────────────────────────────────────
+async function initStatus() {
+  try {
+    const s = await fetch(`${API}/status`).then(r => r.json());
+    document.getElementById('school-title').textContent = s.school + ' — Attendance System';
+    if (s.simulation_mode) document.getElementById('sim-badge').style.display = 'inline';
+    if (s.absent_schedule) {
+      document.getElementById('sched-am').textContent = fmtSched(s.absent_schedule.am);
+      document.getElementById('sched-pm').textContent = fmtSched(s.absent_schedule.pm);
+    }
+  } catch(e) {}
+}
+function fmtSched(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+async function triggerAbsentCheck(session) {
+  const box = document.getElementById('absent-check-result');
+  box.style.display = 'block';
+  box.style.background = '#e8f0fe';
+  box.style.color = '#1a73e8';
+  box.textContent = `Running ${session.toUpperCase()} absent check...`;
+  try {
+    const r    = await fetch(`${API}/attendance/check-absent?session=${session}`, {method:'POST'});
+    const data = await r.json();
+    if (r.ok) {
+      if (data.notified === 0) {
+        box.style.background = '#e6f4ea'; box.style.color = '#1e8c45';
+        box.textContent = `✓ ${session.toUpperCase()} check complete — no new absences found.`;
+      } else {
+        box.style.background = '#fce8e6'; box.style.color = '#d93025';
+        box.textContent = `⚠ ${data.notified} student(s) marked absent & SMS sent: ${data.names.join(', ')}`;
+        loadStats();
+      }
+    } else {
+      box.style.background = '#fce8e6'; box.style.color = '#d93025';
+      box.textContent = `Error: ${data.detail || 'Unknown error'}`;
+    }
+  } catch(e) {
+    box.style.background = '#fce8e6'; box.style.color = '#d93025';
+    box.textContent = `Cannot reach server.`;
+  }
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await fetch(`${API}/attendance/summary`).then(r => r.json());
+    document.getElementById('cnt-present').textContent = s.present;
+    document.getElementById('cnt-late').textContent    = s.late;
+    document.getElementById('cnt-absent').textContent  = s.absent;
+  } catch(e) {}
+}
+
+// ── Recent scans ──────────────────────────────────────────────────────────────
+async function loadRecentScans() {
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    const records = await fetch(`${API}/attendance?target_date=${today}`).then(r => r.json());
+    const tbody = document.getElementById('recent-tbody');
+    tbody.innerHTML = records.slice(0,20).map(rec => `
+      <tr>
+        <td>${rec.student_name}</td>
+        <td>${rec.grade || ''}-${rec.section || ''}</td>
+        <td>${rec.am_time_in  || '-'}</td>
+        <td>${rec.am_time_out || '-'}</td>
+        <td>${rec.pm_time_in  || '-'}</td>
+        <td>${rec.pm_time_out || '-'}</td>
+        <td>${chip(rec.status)}</td>
+      </tr>`).join('');
+    if (!records.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:24px">No scans yet today.</td></tr>';
+  } catch(e) {}
+}
+
+
+// ── Attendance tab ────────────────────────────────────────────────────────────
+function initAttDate() {
+  const el = document.getElementById('att-date');
+  if (!el.value) el.value = new Date().toISOString().split('T')[0];
+}
+let _attRecords = [];
+async function loadAttendance() {
+  initAttDate();
+  const d = document.getElementById('att-date').value;
+  document.getElementById('att-search').value = '';
+  try {
+    _attRecords = await fetch(`${API}/attendance?target_date=${d}`).then(r => r.json());
+    renderAttendance(_attRecords);
+  } catch(e) {
+    document.getElementById('att-tbody').innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--red);padding:24px">Error loading attendance: ${e.message}</td></tr>`;
+  }
+}
+function filterAttendance() {
+  const q = document.getElementById('att-search').value.toLowerCase();
+  renderAttendance(q ? _attRecords.filter(r => (r.student_name||'').toLowerCase().includes(q)) : _attRecords);
+}
+function renderAttendance(records) {
+  const d = document.getElementById('att-date').value;
+  const tbody = document.getElementById('att-tbody');
+  tbody.innerHTML = records.map(rec => `
+    <tr>
+      <td>${rec.student_name}</td>
+      <td>${rec.grade || ''}</td><td>${rec.section || ''}</td>
+      <td>${fmtTime(rec.am_time_in)}</td>
+      <td>${fmtTime(rec.am_time_out)}</td>
+      <td>${fmtTime(rec.pm_time_in)}</td>
+      <td>${fmtTime(rec.pm_time_out)}</td>
+      <td>${chip(rec.status)}</td>
+      <td>${rec.notes || ''}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary" style="font-size:.75rem;padding:4px 8px"
+          onclick="markExcused(${rec.id})">Excused</button>
+        <button class="btn btn-danger" style="font-size:.75rem;padding:4px 8px;margin-left:4px"
+          onclick="deleteAttendance(${rec.id},'${(rec.student_name||'').replace(/'/g,"\\'")}')">Delete</button>
+      </td>
+    </tr>`).join('');
+  if (!records.length) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#999;padding:24px">No attendance records for ${d}.</td></tr>`;
+}
+async function markExcused(id) {
+  await fetch(`${API}/attendance/${id}?status=excused`,{method:'PATCH'});
+  loadAttendance(); toast('Marked as excused');
+}
+function deleteAttendance(id, name) {
+  showConfirmModal(
+    'Delete Attendance Record',
+    `Delete the attendance record for ${name}? This cannot be undone.`,
+    async () => {
+      const r = await fetch(`${API}/attendance/${id}`, {method:'DELETE'});
+      if (r.ok) { toast(`Record for ${name} deleted`); loadAttendance(); }
+      else { const e = await r.json(); toast(e.detail || 'Error deleting record'); }
+    }
+  );
+}
+function fmtTime(t) {
+  if (!t) return '-';
+  const [h, m] = t.split(':');
+  const hour = parseInt(h);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+function exportCSV() {
+  const rows = [['Name','Grade','Section','AM In','AM Out','PM In','PM Out','Status','Notes']];
+  document.querySelectorAll('#att-tbody tr').forEach(tr => {
+    const cells = [...tr.querySelectorAll('td')];
+    if (cells.length >= 9) rows.push(cells.slice(0,9).map(c => `"${c.textContent.trim()}"`));
+  });
+  const a = Object.assign(document.createElement('a'),{
+    href: 'data:text/csv;charset=utf-8,' + encodeURIComponent(rows.map(r=>r.join(',')).join('\n')),
+    download: `attendance_${document.getElementById('att-date').value}.csv`
+  });
+  a.click();
+}
+
+// ── Students tab ──────────────────────────────────────────────────────────────
+async function loadStudents() {
+  try {
+    allStudents = await fetch(`${API}/students?active_only=true`).then(r => r.json());
+    renderStudents(allStudents);
+  } catch(e) {}
+}
+function renderStudents(list) {
+  const tbody = document.getElementById('student-tbody');
+  tbody.innerHTML = list.map(s => {
+    const photoHtml = s.photo_path
+      ? `<img src="${s.photo_path}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--border)" />`
+      : `<div style="width:36px;height:36px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700">${s.full_name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}</div>`;
+    return `
+    <tr onclick="openEditStudentModal(${s.id})" style="cursor:pointer">
+      <td>${photoHtml}</td>
+      <td>${s.full_name}</td>
+      <td>${s.grade || '-'}</td>
+      <td>${s.section || '-'}</td>
+      <td>${s.parent_name}</td>
+      <td>${s.parent_phone}</td>
+      <td><code style="font-size:.78rem">${s.rfid_uid}</code></td>
+      <td style="white-space:nowrap">
+        <span style="display:inline-flex;gap:4px">
+          <button class="btn btn-danger" style="font-size:.72rem;padding:4px 8px"
+            onclick="event.stopPropagation(); deactivateStudent(${s.id},'${s.full_name.replace(/'/g,"\\'")}')">Remove</button>
+        </span>
+      </td>
+    </tr>`;
+  }).join('');
+  if (!list.length) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:24px">No students registered yet.</td></tr>';
+}
+function filterStudents() {
+  const q = document.getElementById('student-search').value.toLowerCase();
+  renderStudents(allStudents.filter(s => s.full_name.toLowerCase().includes(q)));
+}
+let _deleteStudentId = null;
+let _deleteStudentName = null;
+
+function deactivateStudent(id, name) {
+  _deleteStudentId   = id;
+  _deleteStudentName = name;
+  document.getElementById('delete-student-name').textContent = name;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-input').placeholder = name;
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('delete-error').style.display = 'none';
+  document.getElementById('delete-modal').classList.add('open');
+  setTimeout(() => document.getElementById('delete-confirm-input').focus(), 100);
+}
+function checkDeleteInput() {
+  const val = document.getElementById('delete-confirm-input').value.trim();
+  document.getElementById('delete-confirm-btn').disabled =
+    val.toLowerCase() !== _deleteStudentName.toLowerCase();
+}
+function closeDeleteModal() {
+  document.getElementById('delete-modal').classList.remove('open');
+  _deleteStudentId = null;
+  _deleteStudentName = null;
+}
+async function executeDeleteStudent() {
+  if (!_deleteStudentId) return;
+  try {
+    const r = await fetch(`${API}/students/${_deleteStudentId}`, {method:'DELETE'});
+    if (r.ok) {
+      closeDeleteModal();
+      toast(`${_deleteStudentName} removed`);
+      loadStudents();
+    } else {
+      const e = await r.json();
+      const err = document.getElementById('delete-error');
+      err.textContent = e.detail || 'Error removing student';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    const err = document.getElementById('delete-error');
+    err.textContent = 'Could not reach server';
+    err.style.display = 'block';
+  }
+}
+
+// ── Photo upload ───────────────────────────────────────────────────────────────
+function triggerPhotoUpload(studentId) {
+  currentPhotoStudentId = studentId;
+  document.getElementById('photo-file-input').click();
+}
+async function uploadPhotoFile() {
+  const fileInput = document.getElementById('photo-file-input');
+  if (!fileInput.files.length || !currentPhotoStudentId) return;
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  try {
+    const r = await fetch(`${API}/students/${currentPhotoStudentId}/photo`,{method:'POST',body:fd});
+    if (r.ok) { toast('Photo uploaded!'); loadStudents(); }
+    else { const e = await r.json(); toast('Upload failed: ' + (e.detail || 'unknown')); }
+  } catch(e) { toast('Upload error'); }
+  fileInput.value = '';
+}
+
+function closeEditStudentModal() {
+  document.getElementById('edit-student-modal').classList.remove('open');
+  document.getElementById('edit-photo-input').value = '';
+  document.getElementById('edit-photo-name').textContent = 'No file selected';
+  document.getElementById('edit-error').style.display = 'none';
+  currentEditStudentId = null;
+}
+
+function onEditPhotoPicked() {
+  const f = document.getElementById('edit-photo-input').files[0];
+  document.getElementById('edit-photo-name').textContent = f ? f.name : 'No file selected';
+}
+
+function _setEditSectionsForGrade(gradeId, selectedSectionId = null) {
+  const secSelect = document.getElementById('e-section-select');
+  const sections = _editAllSections.filter(s => String(s.grade_id) === String(gradeId));
+  secSelect.innerHTML = '<option value="">— Select section —</option>';
+  sections.forEach(s => {
+    secSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+  });
+  secSelect.disabled = sections.length === 0;
+  if (selectedSectionId) secSelect.value = String(selectedSectionId);
+}
+
+function onEditGradeChange(gradeId) {
+  if (!gradeId) {
+    const secSelect = document.getElementById('e-section-select');
+    secSelect.innerHTML = '<option value="">— Select grade first —</option>';
+    secSelect.disabled = true;
+    return;
+  }
+  _setEditSectionsForGrade(gradeId);
+}
+
+async function openEditStudentModal(studentId) {
+  const s = allStudents.find(x => x.id === studentId);
+  if (!s) return;
+  currentEditStudentId = studentId;
+  document.getElementById('edit-error').style.display = 'none';
+
+  const grades = await fetch(`${API}/grades`).then(r => r.json());
+  _editAllSections = await fetch(`${API}/sections`).then(r => r.json());
+
+  const gradeSelect = document.getElementById('e-grade');
+  gradeSelect.innerHTML = '<option value="">— Select grade —</option>';
+  grades.forEach(g => {
+    gradeSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+  });
+
+  const secObj = _editAllSections.find(sec => String(sec.id) === String(s.section_id));
+  const gradeId = secObj ? secObj.grade_id : '';
+  if (gradeId) {
+    gradeSelect.value = String(gradeId);
+    _setEditSectionsForGrade(gradeId, s.section_id);
+  } else {
+    document.getElementById('e-section-select').innerHTML = '<option value="">— Select section —</option>';
+    document.getElementById('e-section-select').disabled = false;
+  }
+
+  document.getElementById('e-name').value = s.full_name || '';
+  document.getElementById('e-parent').value = s.parent_name || '';
+  document.getElementById('e-phone').value = s.parent_phone || '';
+  document.getElementById('e-rfid').value = s.rfid_uid || '';
+  document.getElementById('edit-photo-preview').src = s.photo_path || '/static/logo.png';
+  document.getElementById('edit-photo-input').value = '';
+  document.getElementById('edit-photo-name').textContent = 'No file selected';
+
+  document.getElementById('edit-student-modal').classList.add('open');
+}
+
+async function saveStudentEdits() {
+  if (!currentEditStudentId) return;
+  const name      = document.getElementById('e-name').value.trim();
+  const sectionId = document.getElementById('e-section-select').value;
+  const parent    = document.getElementById('e-parent').value.trim();
+  const phone     = document.getElementById('e-phone').value.trim();
+  const rfid      = document.getElementById('e-rfid').value.trim().toUpperCase();
+  const err = document.getElementById('edit-error');
+  err.style.display = 'none';
+
+  if (!name || !sectionId || !parent || !phone || !rfid) {
+    err.textContent = 'All fields are required.';
+    err.style.display = 'block';
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API}/students/${currentEditStudentId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        full_name: name,
+        section_id: parseInt(sectionId, 10),
+        parent_name: parent,
+        parent_phone: phone,
+        rfid_uid: rfid
+      }),
+    });
+
+    if (!r.ok) {
+      const e = await r.json();
+      err.textContent = e.detail || 'Update failed';
+      err.style.display = 'block';
+      return;
+    }
+
+    const photoFile = document.getElementById('edit-photo-input').files[0];
+    if (photoFile) {
+      const fd = new FormData();
+      fd.append('file', photoFile);
+      const pr = await fetch(`${API}/students/${currentEditStudentId}/photo`, {method:'POST', body:fd});
+      if (!pr.ok) {
+        const pe = await pr.json();
+        err.textContent = pe.detail || 'Photo upload failed';
+        err.style.display = 'block';
+        return;
+      }
+    }
+
+    closeEditStudentModal();
+    toast('Student updated');
+    loadStudents();
+  } catch (e) {
+    err.textContent = 'Could not reach server';
+    err.style.display = 'block';
+  }
+}
+
+document.getElementById('edit-student-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-student-modal')) closeEditStudentModal();
+});
+
+// ── Register modal ────────────────────────────────────────────────────────────
+async function openRegisterModal() {
+  ['f-name','f-parent','f-phone','f-rfid'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('reg-error').style.display = 'none';
+  // Populate grade dropdown from API
+  const gradeSelect = document.getElementById('f-grade');
+  gradeSelect.innerHTML = '<option value="">— Select grade —</option>';
+  try {
+    const grades = await fetch(`${API}/grades`).then(r => r.json());
+    grades.forEach(g => {
+      gradeSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+    });
+  } catch(e) {}
+  // Reset section dropdown
+  const secSelect = document.getElementById('f-section-select');
+  secSelect.innerHTML = '<option value="">— Select grade first —</option>';
+  secSelect.disabled = true;
+  document.getElementById('register-modal').classList.add('open');
+  setTimeout(() => document.getElementById('f-name').focus(), 100);
+}
+async function onGradeChange(gradeId) {
+  const secSelect = document.getElementById('f-section-select');
+  if (!gradeId) { secSelect.innerHTML = '<option value="">— Select grade first —</option>'; secSelect.disabled = true; return; }
+  secSelect.innerHTML = '<option value="">Loading...</option>';
+  try {
+    const sections = await fetch(`${API}/sections?grade_id=${gradeId}`).then(r => r.json());
+    secSelect.innerHTML = '<option value="">— Select section —</option>';
+    sections.forEach(s => { secSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`; });
+    secSelect.disabled = false;
+  } catch(e) { secSelect.innerHTML = '<option value="">Error loading sections</option>'; }
+}
+function closeModal() {
+  document.getElementById('register-modal').classList.remove('open');
+}
+document.getElementById('register-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('register-modal')) closeModal();
+});
+document.getElementById('delete-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('delete-modal')) closeDeleteModal();
+});
+async function registerStudent() {
+  const name      = document.getElementById('f-name').value.trim();
+  const sectionId = document.getElementById('f-section-select').value;
+  const parent    = document.getElementById('f-parent').value.trim();
+  const phone     = document.getElementById('f-phone').value.trim();
+  const rfid      = document.getElementById('f-rfid').value.trim();
+  const errEl     = document.getElementById('reg-error');
+  errEl.style.display = 'none';
+  if (!name || !sectionId || !parent || !phone || !rfid) {
+    errEl.textContent = 'All fields are required.'; errEl.style.display = 'block'; return;
+  }
+  try {
+    const r = await fetch(`${API}/students`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({full_name:name, section_id:parseInt(sectionId), parent_name:parent, parent_phone:phone, rfid_uid:rfid}),
+    });
+    if (r.ok) { closeModal(); toast(`${name} registered!`); loadStudents(); }
+    else { const e = await r.json(); errEl.textContent = e.detail || 'Registration failed.'; errEl.style.display = 'block'; }
+  } catch(e) { errEl.textContent = 'Server error. Please try again.'; errEl.style.display = 'block'; }
+}
+
+// ── Grades & Sections tab ─────────────────────────────────────────────────────
+let gradesCache = [];
+async function loadGrades() {
+  try {
+    gradesCache = await fetch(`${API}/grades`).then(r => r.json());
+    const tbody = document.getElementById('grade-tbody');
+    // Count sections per grade
+    const allSections = await fetch(`${API}/sections`).then(r => r.json());
+    const allStudentsData = await fetch(`${API}/students?active_only=true`).then(r => r.json());
+    tbody.innerHTML = gradesCache.map(g => {
+      const secCount = allSections.filter(s => s.grade_id === g.id).length;
+      const stuCount = allStudentsData.filter(s => s.grade === g.name).length;
+      return `<tr>
+        <td><strong>${g.name}</strong></td>
+        <td>${secCount}</td>
+        <td>${stuCount}</td>
+        <td>
+          <button class="btn btn-secondary" style="font-size:.72rem;padding:4px 8px"
+            onclick="selectGradeForSections(${g.id},'${g.name}')">View Sections</button>
+          <button class="btn btn-danger" style="font-size:.72rem;padding:4px 8px;margin-left:4px"
+            onclick="deleteGrade(${g.id},'${g.name}')">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+    if (!gradesCache.length) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;padding:24px">No grades added yet.</td></tr>';
+    // Sync grade select in sections panel
+    const sel = document.getElementById('section-grade-select');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— Select a grade —</option>';
+    gradesCache.forEach(g => { sel.innerHTML += `<option value="${g.id}">${g.name}</option>`; });
+    if (prev) sel.value = prev;
+  } catch(e) {}
+}
+async function addGrade() {
+  const name = document.getElementById('new-grade-name').value.trim();
+  if (!name) { toast('Enter a grade name'); return; }
+  try {
+    const r = await fetch(`${API}/grades`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+    if (r.ok) { document.getElementById('new-grade-name').value = ''; toast(`${name} added!`); loadGrades(); }
+    else { const e = await r.json(); toast(e.detail || 'Error'); }
+  } catch(e) {}
+}
+function deleteGrade(id, name) {
+  showConfirmModal(
+    `Delete ${name}`,
+    `Delete "${name}"? All sections under it must be removed first.`,
+    async () => {
+      const r = await fetch(`${API}/grades/${id}`,{method:'DELETE'});
+      if (r.ok) { toast(`${name} deleted`); loadGrades(); }
+      else { const e = await r.json(); toast(e.detail || 'Error'); }
+    }
+  );
+}
+function selectGradeForSections(gradeId, gradeName) {
+  document.getElementById('section-grade-select').value = gradeId;
+  document.getElementById('sections-grade-label').textContent = `— ${gradeName}`;
+  loadSections(gradeId);
+}
+async function loadSections(gradeId) {
+  if (!gradeId) { document.getElementById('section-tbody').innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:24px">Select a grade.</td></tr>'; return; }
+  try {
+    const sections = await fetch(`${API}/sections?grade_id=${gradeId}`).then(r => r.json());
+    const allStudentsData = await fetch(`${API}/students?active_only=true`).then(r => r.json());
+    const tbody = document.getElementById('section-tbody');
+    tbody.innerHTML = sections.map(s => {
+      const stuCount = allStudentsData.filter(st => st.section === s.name && st.grade === s.grade_name).length;
+      return `<tr>
+        <td>${s.name}</td>
+        <td>${stuCount}</td>
+        <td><button class="btn btn-danger" style="font-size:.72rem;padding:4px 8px"
+          onclick="deleteSection(${s.id},'${s.name}')">Delete</button></td>
+      </tr>`;
+    }).join('');
+    if (!sections.length) tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:24px">No sections yet. Add one above.</td></tr>';
+  } catch(e) {}
+}
+async function addSection() {
+  const gradeId = document.getElementById('section-grade-select').value;
+  const name    = document.getElementById('new-section-name').value.trim();
+  if (!gradeId) { toast('Select a grade first'); return; }
+  if (!name)    { toast('Enter a section name'); return; }
+  try {
+    const r = await fetch(`${API}/sections`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({grade_id:parseInt(gradeId),name})});
+    if (r.ok) { document.getElementById('new-section-name').value = ''; toast(`Section "${name}" added!`); loadSections(gradeId); loadGrades(); }
+    else { const e = await r.json(); toast(e.detail || 'Error'); }
+  } catch(e) {}
+}
+function deleteSection(id, name) {
+  showConfirmModal(
+    `Delete Section "${name}"`,
+    `Delete section "${name}"? It must have no active students.`,
+    async () => {
+      const r = await fetch(`${API}/sections/${id}`,{method:'DELETE'});
+      if (r.ok) { toast(`"${name}" deleted`); loadGrades(); loadSections(document.getElementById('section-grade-select').value); }
+      else { const e = await r.json(); toast(e.detail || 'Error'); }
+    }
+  );
+}
+
+// ── School Year Promotion ─────────────────────────────────────────────────────
+async function populatePromoteSections() {
+  try {
+    const sections = await fetch(`${API}/sections`).then(r => r.json());
+    const opts = sections.map(s => `<option value="${s.id}">${s.grade_name} — ${s.name}</option>`).join('');
+    document.getElementById('promote-from').innerHTML = '<option value="">— Select source section —</option>' + opts;
+    document.getElementById('promote-to').innerHTML   = '<option value="">— Select target section —</option>' + opts;
+  } catch(e) {}
+}
+
+async function previewPromotion() {
+  const fromId = document.getElementById('promote-from').value;
+  const toId   = document.getElementById('promote-to').value;
+  if (!fromId) { toast('Select a source section'); return; }
+  if (!toId)   { toast('Select a target section'); return; }
+  if (fromId === toId) { toast('Source and target must be different'); return; }
+  try {
+    const students = await fetch(`${API}/students?section_id=${fromId}`).then(r => r.json());
+    const fromLabel = document.getElementById('promote-from').selectedOptions[0].text;
+    const toLabel   = document.getElementById('promote-to').selectedOptions[0].text;
+    const preview   = document.getElementById('promote-preview');
+    document.getElementById('promote-preview-label').textContent =
+      `${students.length} student(s) will move: ${fromLabel} → ${toLabel}`;
+    document.getElementById('promote-preview-list').innerHTML = students.length
+      ? students.map(s => `• ${s.full_name}`).join('<br>')
+      : '<em style="color:#999">No active students in this section.</em>';
+    preview.style.display = 'block';
+  } catch(e) { toast('Error loading preview'); }
+}
+
+function confirmPromotion() {
+  const fromId    = document.getElementById('promote-from').value;
+  const toId      = document.getElementById('promote-to').value;
+  const fromLabel = document.getElementById('promote-from').selectedOptions[0].text;
+  const toLabel   = document.getElementById('promote-to').selectedOptions[0].text;
+  showConfirmModal(
+    'Promote Students',
+    `Move all students from "${fromLabel}" to "${toLabel}"? This cannot be undone.`,
+    async () => {
+      const r    = await fetch(`${API}/students/promote?from_section_id=${fromId}&to_section_id=${toId}`, {method:'POST'});
+      const data = await r.json();
+      if (r.ok) {
+        toast(`✓ ${data.promoted} student(s) promoted to ${data.to_section}`);
+        document.getElementById('promote-preview').style.display = 'none';
+        loadGrades();
+      } else {
+        toast(data.detail || 'Error promoting students');
+      }
+    }
+  );
+}
+
+// ── SMS Logs tab ──────────────────────────────────────────────────────────────
+async function loadSmsLogs() {
+  try {
+    const s = await fetch(`${API}/status`).then(r => r.json());
+    const box = document.getElementById('modem-status');
+    if (s.modems) {
+      const {primary, secondary, fallback_enabled} = s.modems;
+      box.innerHTML = [primary, secondary].map((m,i) => `
+        <div style="display:flex;align-items:center;gap:8px;background:${m.ok?'#e6f4ea':'#fce8e6'};padding:8px 14px;border-radius:8px;font-size:.85rem">
+          <span>${m.ok?'🟢':'🔴'}</span>
+          <div><strong>${m.label}</strong>${i===1&&fallback_enabled?'<span style="font-size:.72rem;background:#e8eaf6;color:#3949ab;padding:1px 6px;border-radius:8px;margin-left:6px">FALLBACK</span>':''}<br>
+          <span style="font-size:.78rem;color:#555">${m.message}</span></div>
+        </div>`).join('');
+    }
+  } catch(e) {}
+  try {
+    const logs = await fetch(`${API}/sms-logs?limit=100`).then(r => r.json());
+    const tbody = document.getElementById('sms-tbody');
+    tbody.innerHTML = logs.map(l => {
+      const modemChip = l.modem_used
+        ? `<span class="chip" style="background:#e8eaf6;color:#3949ab">${l.modem_used}</span>`
+        : '<span style="color:#bbb;font-size:.78rem">—</span>';
+      return `<tr>
+        <td style="white-space:nowrap">${new Date(l.sent_at).toLocaleString('en-PH')}</td>
+        <td>${l.student_id}</td><td>${l.phone}</td>
+        <td style="text-transform:capitalize">${l.sms_type}</td>
+        <td>${chip(l.status)}</td><td>${modemChip}</td>
+        <td style="font-size:.78rem;max-width:240px;white-space:pre-wrap">${l.message}</td>
+      </tr>`;
+    }).join('');
+    if (!logs.length) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No SMS logs yet.</td></tr>';
+  } catch(e) {}
+}
+
+// ── Auto-refresh ──────────────────────────────────────────────────────────────
+setInterval(() => {
+  if (document.getElementById('tab-scanner').classList.contains('active')) { loadStats(); loadRecentScans(); }
+}, 30000);
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initStatus(); loadStats(); loadRecentScans();
+</script>
+</body>
+</html>
