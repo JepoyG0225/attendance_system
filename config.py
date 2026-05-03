@@ -22,14 +22,14 @@ SCHOOL_TIMEZONE  = "Asia/Manila"   # Used for time display
 GSM_PRIMARY = {
     # Windows: "COM3"  |  macOS/Linux: "/dev/tty.usbmodem1401" or "/dev/ttyUSB0"
     # Check macOS: ls /dev/tty.* in Terminal to find your modem port
-    "port":     "COM7",
+    "port":     "/dev/cu.usbserial-10",
     "baudrate": 115200,
     "timeout":  10,
     "label":    "Smart (Primary)",
 }
 
 GSM_SECONDARY = {
-    "port":     "COM8",
+    "port":     "/dev/cu.usbserial-10",
     "baudrate": 115200,
     "timeout":  10,
     "label":    "Globe (Fallback)",
