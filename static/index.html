@@ -227,7 +227,7 @@
 
     /* ── Toast ────────────────────────────────────────────────────────── */
     #toast {
-      position: fixed; bottom: 24px; right: 24px;
+      position: fixed; bottom: 72px; right: 24px;
       background: #323232; color: #fff;
       padding: 12px 20px; border-radius: 8px;
       font-size: .88rem; opacity: 0;
@@ -235,6 +235,49 @@
       pointer-events: none; z-index: 200;
     }
     #toast.show { opacity: 1; }
+
+    /* ── GSM Modules card (Dashboard) ──────────────────────────────────── */
+    .gsm-list { display: flex; flex-direction: column; gap: 10px; }
+    .gsm-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px;
+      background: var(--light);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: border-color .2s, background .2s;
+    }
+    .gsm-row.ok     { background: #e6f4ea; border-color: rgba(30,140,69,.35); }
+    .gsm-row.fail   { background: #fce8e6; border-color: rgba(217,48,37,.25); }
+    .gsm-row.sim    { background: #fef7e0; border-color: rgba(249,171,0,.4); }
+    .gsm-dot {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: #bdc1c6; flex-shrink: 0;
+    }
+    .gsm-row.ok   .gsm-dot { background: var(--green); box-shadow: 0 0 0 3px rgba(30,140,69,.18); }
+    .gsm-row.fail .gsm-dot { background: var(--red);   box-shadow: 0 0 0 3px rgba(217,48,37,.16); }
+    .gsm-row.sim  .gsm-dot { background: var(--yellow); }
+    .gsm-info { flex: 1; min-width: 0; }
+    .gsm-line1 {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: .9rem; font-weight: 600; color: #202124;
+    }
+    .gsm-tag {
+      font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+      padding: 2px 7px; border-radius: 10px;
+      background: #e8eaf6; color: #3949ab;
+    }
+    .gsm-tag.fallback { background: #fff3e0; color: #b06200; }
+    .gsm-line2 {
+      font-size: .78rem; color: var(--gray); margin-top: 2px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .gsm-port {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: .72rem; color: var(--gray);
+    }
+    #gsm-refreshed {
+      font-size: .72rem; color: var(--gray); margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -260,8 +303,6 @@
     <button class="tab" onclick="switchTab('students')">Students</button>
     <button class="tab" onclick="switchTab('classes')">Grades &amp; Sections</button>
     <button class="tab" onclick="switchTab('sms')">SMS Logs</button>
-    <a href="/scanner?id=1&label=Scanner+1" target="_blank" class="btn btn-primary" style="margin-left:auto;padding:7px 14px;font-size:.82rem;text-decoration:none;align-self:center">Open Scanner 1 ↗</a>
-    <a href="/scanner?id=2&label=Scanner+2" target="_blank" class="btn btn-secondary" style="padding:7px 14px;font-size:.82rem;text-decoration:none;align-self:center">Open Scanner 2 ↗</a>
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════
@@ -278,15 +319,14 @@
 
     <div class="grid-2">
       <div class="card">
-        <h2>Dashboard</h2>
-        <p style="font-size:.9rem;color:var(--gray);line-height:1.6">
-          Use this page for attendance overview, student records, classes, and SMS logs.
-          RFID scanning has been moved to dedicated scanner screens.
+        <h2>GSM Modules</h2>
+        <p style="font-size:.85rem;color:var(--gray);margin-bottom:12px">
+          USB modems auto-detected at runtime. The system uses the first as primary and falls back to the second.
         </p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-          <a href="/scanner?id=1&label=Scanner+1" target="_blank" class="btn btn-primary" style="text-decoration:none">Open Scanner 1</a>
-          <a href="/scanner?id=2&label=Scanner+2" target="_blank" class="btn btn-secondary" style="text-decoration:none">Open Scanner 2</a>
+        <div id="gsm-list" class="gsm-list">
+          <div class="gsm-row"><span class="gsm-dot"></span><div class="gsm-info"><div class="gsm-line1">Detecting modems…</div></div></div>
         </div>
+        <div id="gsm-refreshed"></div>
       </div>
 
       <!-- Absent SMS Schedule -->
@@ -355,6 +395,7 @@
     <div class="card">
       <div class="toolbar">
         <input type="text" id="student-search" placeholder="Search by name..." oninput="filterStudents()" />
+        <button class="btn btn-primary" onclick="openCsvImportModal()">⬆ Import CSV</button>
         <button class="btn btn-success" onclick="openRegisterModal()">+ Register Student</button>
       </div>
       <div class="table-wrap">
@@ -430,9 +471,16 @@
       <div id="promote-preview" style="display:none">
         <div style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">
           <div id="promote-preview-label" style="font-weight:600;margin-bottom:10px;color:var(--blue)"></div>
-          <div id="promote-preview-list" style="max-height:160px;overflow-y:auto;font-size:.88rem;color:#333;line-height:1.8"></div>
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;font-size:.82rem">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:var(--gray)">
+              <input type="checkbox" id="promote-select-all" onchange="togglePromoteAll(this.checked)" style="margin:0" />
+              Select all
+            </label>
+            <span id="promote-selected-count" style="color:var(--gray)">0 selected</span>
+          </div>
+          <div id="promote-preview-list" style="max-height:220px;overflow-y:auto;font-size:.88rem;color:#333"></div>
         </div>
-        <button class="btn btn-danger" onclick="confirmPromotion()">Promote Students</button>
+        <button class="btn btn-danger" onclick="confirmPromotion()">Promote Selected</button>
       </div>
     </div>
 
@@ -532,6 +580,53 @@
 <!-- Hidden file input for photo upload -->
 <input type="file" id="photo-file-input" accept="image/*" style="display:none" onchange="uploadPhotoFile()" />
 
+<!-- ── CSV Import Modal ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="csv-import-modal">
+  <div class="modal" style="max-width:780px">
+    <h3>Import Students from CSV</h3>
+
+    <div id="csv-step-pick">
+      <p style="font-size:.88rem;color:var(--gray);margin-bottom:14px;line-height:1.55">
+        Upload a CSV with columns:
+        <code style="background:var(--light);padding:1px 6px;border-radius:4px;font-size:.8rem">rfid_uid, full_name, grade, section, parent_name, parent_phone</code>.
+        Grades and sections must already exist in the system.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+        <input type="file" id="csv-file-input" accept=".csv,text/csv" style="flex:1;min-width:240px" />
+        <a href="#" onclick="downloadCsvTemplate(event)" style="font-size:.85rem;color:var(--blue);text-decoration:none">⬇ Download template</a>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeCsvImportModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
+      </div>
+    </div>
+
+    <div id="csv-step-preview" style="display:none">
+      <div id="csv-preview-summary" style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:.88rem"></div>
+      <div style="max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+        <table style="width:100%;font-size:.82rem">
+          <thead style="position:sticky;top:0;background:#f1f3f4">
+            <tr>
+              <th style="padding:8px 10px;text-align:left">Row</th>
+              <th style="padding:8px 10px;text-align:left">RFID</th>
+              <th style="padding:8px 10px;text-align:left">Name</th>
+              <th style="padding:8px 10px;text-align:left">Grade · Section</th>
+              <th style="padding:8px 10px;text-align:left">Parent</th>
+              <th style="padding:8px 10px;text-align:left">Phone</th>
+              <th style="padding:8px 10px;text-align:left">Status</th>
+            </tr>
+          </thead>
+          <tbody id="csv-preview-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="resetCsvImport()">Back</button>
+        <button class="btn btn-success" id="csv-commit-btn" onclick="commitCsvImport()">Import Valid Rows</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Edit Student Modal ───────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="edit-student-modal">
   <div class="modal">
@@ -589,7 +684,9 @@ let allStudents  = [];
 let currentPhotoStudentId = null;
 let currentEditStudentId = null;
 let _editAllSections = [];
-const API = '';
+const API = window.location.origin && window.location.origin.startsWith('http')
+  ? window.location.origin
+  : 'http://127.0.0.1:8000';
 
 // ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -1221,29 +1318,56 @@ async function previewPromotion() {
     const toLabel   = document.getElementById('promote-to').selectedOptions[0].text;
     const preview   = document.getElementById('promote-preview');
     document.getElementById('promote-preview-label').textContent =
-      `${students.length} student(s) will move: ${fromLabel} → ${toLabel}`;
-    document.getElementById('promote-preview-list').innerHTML = students.length
-      ? students.map(s => `• ${s.full_name}`).join('<br>')
+      `${fromLabel} → ${toLabel}`;
+    const list = document.getElementById('promote-preview-list');
+    list.innerHTML = students.length
+      ? students.map(s => `
+          <label style="display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid #eee;cursor:pointer">
+            <input type="checkbox" class="promote-check" value="${s.id}" onchange="updatePromoteCount()" checked />
+            <span>${s.full_name}</span>
+          </label>`).join('')
       : '<em style="color:#999">No active students in this section.</em>';
+    document.getElementById('promote-select-all').checked = students.length > 0;
     preview.style.display = 'block';
+    updatePromoteCount();
   } catch(e) { toast('Error loading preview'); }
 }
 
+function togglePromoteAll(checked) {
+  document.querySelectorAll('.promote-check').forEach(cb => cb.checked = checked);
+  updatePromoteCount();
+}
+
+function updatePromoteCount() {
+  const checks = document.querySelectorAll('.promote-check');
+  const checked = document.querySelectorAll('.promote-check:checked');
+  document.getElementById('promote-selected-count').textContent = `${checked.length} of ${checks.length} selected`;
+  const all = document.getElementById('promote-select-all');
+  if (all) all.checked = checks.length > 0 && checked.length === checks.length;
+}
+
 function confirmPromotion() {
-  const fromId    = document.getElementById('promote-from').value;
   const toId      = document.getElementById('promote-to').value;
-  const fromLabel = document.getElementById('promote-from').selectedOptions[0].text;
   const toLabel   = document.getElementById('promote-to').selectedOptions[0].text;
+  const studentIds = [...document.querySelectorAll('.promote-check:checked')].map(cb => parseInt(cb.value));
+  if (!studentIds.length) { toast('Select at least one student'); return; }
   showConfirmModal(
     'Promote Students',
-    `Move all students from "${fromLabel}" to "${toLabel}"? This cannot be undone.`,
+    `Move ${studentIds.length} selected student(s) to "${toLabel}"? This cannot be undone.`,
     async () => {
-      const r    = await fetch(`${API}/students/promote?from_section_id=${fromId}&to_section_id=${toId}`, {method:'POST'});
+      const r = await fetch(`${API}/students/bulk-promote`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({student_ids: studentIds, to_section_id: parseInt(toId)}),
+      });
       const data = await r.json();
       if (r.ok) {
         toast(`✓ ${data.promoted} student(s) promoted to ${data.to_section}`);
         document.getElementById('promote-preview').style.display = 'none';
         loadGrades();
+        if (document.getElementById('tab-students').classList.contains('active')) {
+          loadStudents();
+        }
       } else {
         toast(data.detail || 'Error promoting students');
       }
@@ -1251,8 +1375,95 @@ function confirmPromotion() {
   );
 }
 
+// ── CSV Import ────────────────────────────────────────────────────────────────
+function openCsvImportModal() {
+  resetCsvImport();
+  document.getElementById('csv-import-modal').classList.add('open');
+}
+function closeCsvImportModal() {
+  document.getElementById('csv-import-modal').classList.remove('open');
+}
+function resetCsvImport() {
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-step-pick').style.display = 'block';
+  document.getElementById('csv-step-preview').style.display = 'none';
+  document.getElementById('csv-preview-tbody').innerHTML = '';
+}
+
+function downloadCsvTemplate(e) {
+  e.preventDefault();
+  const header = 'rfid_uid,full_name,grade,section,parent_name,parent_phone\n';
+  const example = 'ABC1234,Juan Dela Cruz,Grade 1,Sampaguita,Maria Dela Cruz,09171234567\n';
+  const blob = new Blob([header + example], {type: 'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'students-template.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function previewCsvImport() {
+  const input = document.getElementById('csv-file-input');
+  if (!input.files.length) { toast('Choose a CSV file first'); return; }
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  try {
+    const r = await fetch(`${API}/students/import-csv/preview`, {method: 'POST', body: fd});
+    const data = await r.json();
+    if (!r.ok) { toast(data.detail || 'Failed to parse CSV'); return; }
+    renderCsvPreview(data);
+  } catch(e) { toast('Error reading CSV'); }
+}
+
+function renderCsvPreview(data) {
+  document.getElementById('csv-step-pick').style.display    = 'none';
+  document.getElementById('csv-step-preview').style.display = 'block';
+  document.getElementById('csv-preview-summary').innerHTML = `
+    <strong>${data.total_rows}</strong> row(s) ·
+    <span style="color:var(--green);font-weight:600">${data.valid_count} valid</span> ·
+    <span style="color:var(--red);font-weight:600">${data.error_count} with errors</span>
+  `;
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  document.getElementById('csv-preview-tbody').innerHTML = data.rows.map(r => `
+    <tr style="background:${r.valid ? '#fff' : '#fce8e6'};border-top:1px solid #eee">
+      <td style="padding:6px 10px;color:var(--gray)">${r.row}</td>
+      <td style="padding:6px 10px;font-family:ui-monospace,monospace;font-size:.78rem">${esc(r.rfid_uid)}</td>
+      <td style="padding:6px 10px">${esc(r.full_name)}</td>
+      <td style="padding:6px 10px">${esc(r.grade)} · ${esc(r.section)}</td>
+      <td style="padding:6px 10px">${esc(r.parent_name)}</td>
+      <td style="padding:6px 10px;font-family:ui-monospace,monospace;font-size:.78rem">${esc(r.parent_phone)}</td>
+      <td style="padding:6px 10px;color:${r.valid ? 'var(--green)' : 'var(--red)'};font-weight:600">
+        ${r.valid ? '✓ OK' : esc(r.error || 'Invalid')}
+      </td>
+    </tr>`).join('');
+  const btn = document.getElementById('csv-commit-btn');
+  btn.textContent = `Import ${data.valid_count} Valid Row(s)`;
+  btn.disabled = data.valid_count === 0;
+  btn.style.opacity = data.valid_count === 0 ? '.5' : '1';
+}
+
+async function commitCsvImport() {
+  const input = document.getElementById('csv-file-input');
+  if (!input.files.length) { toast('No CSV selected'); return; }
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  const btn = document.getElementById('csv-commit-btn');
+  btn.disabled = true; btn.textContent = 'Importing…';
+  try {
+    const r = await fetch(`${API}/students/import-csv`, {method: 'POST', body: fd});
+    const data = await r.json();
+    if (!r.ok) { toast(data.detail || 'Import failed'); btn.disabled = false; return; }
+    toast(`✓ Imported ${data.created} student(s). Skipped ${data.skipped}.`);
+    closeCsvImportModal();
+    loadStudents();
+  } catch(e) {
+    toast('Error importing CSV');
+    btn.disabled = false;
+  }
+}
+
 // ── SMS Logs tab ──────────────────────────────────────────────────────────────
 async function loadSmsLogs() {
+  const tbody = document.getElementById('sms-tbody');
   try {
     const s = await fetch(`${API}/status`).then(r => r.json());
     const box = document.getElementById('modem-status');
@@ -1265,10 +1476,11 @@ async function loadSmsLogs() {
           <span style="font-size:.78rem;color:#555">${m.message}</span></div>
         </div>`).join('');
     }
-  } catch(e) {}
+  } catch(e) {
+    console.error('Failed to load modem status:', e);
+  }
   try {
     const logs = await fetch(`${API}/sms-logs?limit=100`).then(r => r.json());
-    const tbody = document.getElementById('sms-tbody');
     tbody.innerHTML = logs.map(l => {
       const modemChip = l.modem_used
         ? `<span class="chip" style="background:#e8eaf6;color:#3949ab">${l.modem_used}</span>`
@@ -1282,7 +1494,10 @@ async function loadSmsLogs() {
       </tr>`;
     }).join('');
     if (!logs.length) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No SMS logs yet.</td></tr>';
-  } catch(e) {}
+  } catch(e) {
+    console.error('Failed to load SMS logs:', e);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red);padding:24px">Cannot load SMS logs. Check if server is running and reachable.</td></tr>';
+  }
 }
 
 // ── Auto-refresh ──────────────────────────────────────────────────────────────
@@ -1290,8 +1505,58 @@ setInterval(() => {
   if (document.getElementById('tab-scanner').classList.contains('active')) { loadStats(); loadRecentScans(); }
 }, 30000);
 
+// ── GSM Modules card (Dashboard) ──────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+async function loadGsmModules() {
+  const list = document.getElementById('gsm-list');
+  const refreshed = document.getElementById('gsm-refreshed');
+  try {
+    const s = await fetch(`${API}/status`, { cache: 'no-store' }).then(r => r.json());
+    const sim = s.simulation_mode;
+    const fbk = s.modems?.fallback_enabled;
+    const modems = [
+      { ...s.modems?.primary,   role: 'PRIMARY'  },
+      { ...s.modems?.secondary, role: fbk ? 'FALLBACK' : 'DISABLED' },
+    ];
+    list.innerHTML = modems.map(m => {
+      const ok    = !!m.ok;
+      const cls   = sim ? 'sim' : (ok ? 'ok' : 'fail');
+      const port  = m.port ? esc(m.port) : '<em style="opacity:.6">not detected</em>';
+      const sig   = m.signal_label
+        ? `${esc(m.signal_label)}${m.signal_rssi != null ? ' ('+m.signal_rssi+'/31)' : ''}`
+        : '';
+      const tagCls = m.role === 'FALLBACK' ? 'fallback' : '';
+      return `
+        <div class="gsm-row ${cls}">
+          <span class="gsm-dot"></span>
+          <div class="gsm-info">
+            <div class="gsm-line1">
+              ${esc(m.label || m.role)}
+              <span class="gsm-tag ${tagCls}">${m.role}</span>
+              ${sig ? `<span class="gsm-tag" style="background:#e8f0fe;color:#1a73e8">${sig}</span>` : ''}
+            </div>
+            <div class="gsm-line2">
+              <span class="gsm-port">${port}</span>
+              ${m.message ? ' · ' + esc(m.message) : ''}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+    refreshed.textContent = `Last checked: ${new Date().toLocaleTimeString('en-PH')}`
+      + (sim ? ' · simulation mode' : '');
+  } catch (e) {
+    list.innerHTML = `<div class="gsm-row fail"><span class="gsm-dot"></span><div class="gsm-info"><div class="gsm-line1">Server unreachable</div><div class="gsm-line2">${esc(e.message || e)}</div></div></div>`;
+    refreshed.textContent = `Last checked: ${new Date().toLocaleTimeString('en-PH')}`;
+  }
+}
+setInterval(() => {
+  if (document.getElementById('tab-scanner').classList.contains('active')) loadGsmModules();
+}, 15000);
+
 // ── Init ──────────────────────────────────────────────────────────────────────
-initStatus(); loadStats(); loadRecentScans();
+initStatus(); loadStats(); loadRecentScans(); loadGsmModules();
 </script>
 </body>
 </html>

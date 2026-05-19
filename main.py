@@ -8,12 +8,15 @@ Scanner 2:  http://localhost:8000/scanner?id=2&label=Exit
 """
 
 import os
+import re
+import csv
+import io
 import shutil
 import logging
 from datetime import date as date_type
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -28,10 +31,11 @@ from schemas import (
     SectionCreate, SectionOut,
     StudentCreate, StudentOut, StudentUpdate,
     AttendanceOut, RFIDScan, ScanResponse,
+    BulkPromote, CSVImportRow, CSVImportPreview, CSVImportResult,
     DailySummary, SMSLogOut,
 )
 from attendance import process_scan, get_daily_summary, check_absences
-from sms import test_all_modems
+from sms import test_all_modems, _resolve_modem_ports
 from config import (
     SCHOOL_NAME, SIMULATION_MODE,
     ABSENT_AM_HOUR, ABSENT_AM_MINUTE,
@@ -85,6 +89,7 @@ def on_startup():
     mode = "SIMULATION" if SIMULATION_MODE else "PRODUCTION"
     logger.info(f"Attendance System v2 started | Mode: {mode}")
     logger.info(f"Absent SMS scheduled — AM: {ABSENT_AM_HOUR:02d}:{ABSENT_AM_MINUTE:02d} | PM: {ABSENT_PM_HOUR:02d}:{ABSENT_PM_MINUTE:02d}")
+    _resolve_modem_ports()
 
 
 # ── Helper: build StudentOut from ORM object ──────────────────────────────────
@@ -341,6 +346,153 @@ def promote_students(
     }
 
 
+@app.post("/students/bulk-promote", tags=["Students"])
+def bulk_promote_students(data: BulkPromote, db: Session = Depends(get_db)):
+    """Move a specific list of students into a target section."""
+    if not data.student_ids:
+        raise HTTPException(400, "No students selected")
+    to_section = db.query(Section).filter(Section.id == data.to_section_id).first()
+    if not to_section:
+        raise HTTPException(404, "Target section not found")
+
+    students = db.query(Student).filter(Student.id.in_(data.student_ids)).all()
+    found_ids = {s.id for s in students}
+    missing   = [sid for sid in data.student_ids if sid not in found_ids]
+
+    for s in students:
+        s.section_id = data.to_section_id
+    db.commit()
+
+    return {
+        "promoted":   len(students),
+        "missing":    missing,
+        "to_section": to_section.name,
+        "names":      [s.full_name for s in students],
+    }
+
+
+# ── CSV student import ────────────────────────────────────────────────────────
+
+_CSV_REQUIRED_FIELDS = ("rfid_uid", "full_name", "grade", "section", "parent_name", "parent_phone")
+
+
+def _normalize_ph_phone(raw: str) -> Optional[str]:
+    v = (raw or "").strip().replace(" ", "").replace("-", "")
+    if v.startswith("09") and len(v) == 11:
+        v = "+63" + v[1:]
+    if re.match(r"^\+639\d{9}$", v):
+        return v
+    return None
+
+
+def _parse_csv_rows(content: bytes, db: Session) -> tuple[list[CSVImportRow], dict[tuple[str, str], int]]:
+    """
+    Parse + validate CSV bytes. Returns (rows, section_lookup) where section_lookup
+    maps (grade_lower, section_lower) -> section_id. Rows include validation status.
+    """
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(400, "CSV is empty or has no header row")
+    missing_fields = [f for f in _CSV_REQUIRED_FIELDS if f not in reader.fieldnames]
+    if missing_fields:
+        raise HTTPException(400, f"CSV missing required column(s): {', '.join(missing_fields)}")
+
+    # Build (grade_lower, section_lower) -> section.id map
+    section_lookup: dict[tuple[str, str], int] = {}
+    for sec in db.query(Section).join(Grade).all():
+        section_lookup[(sec.grade.name.strip().lower(), sec.name.strip().lower())] = sec.id
+
+    # Existing RFIDs (case-insensitive)
+    existing_rfids = {r[0].upper() for r in db.query(Student.rfid_uid).all()}
+    seen_rfids: set[str] = set()
+
+    rows: list[CSVImportRow] = []
+    for i, raw in enumerate(reader, start=2):           # start=2 → row 1 is header
+        rfid    = (raw.get("rfid_uid")     or "").strip().upper()
+        name    = (raw.get("full_name")    or "").strip()
+        grade   = (raw.get("grade")        or "").strip()
+        section = (raw.get("section")      or "").strip()
+        parent  = (raw.get("parent_name")  or "").strip()
+        phone   = (raw.get("parent_phone") or "").strip()
+
+        row = CSVImportRow(
+            row=i, rfid_uid=rfid, full_name=name, grade=grade,
+            section=section, parent_name=parent, parent_phone=phone,
+        )
+
+        if not rfid:
+            row.error = "rfid_uid is required"
+        elif not name:
+            row.error = "full_name is required"
+        elif not grade or not section:
+            row.error = "grade and section are required"
+        elif not parent:
+            row.error = "parent_name is required"
+        else:
+            normalized = _normalize_ph_phone(phone)
+            if not normalized:
+                row.error = "Invalid PH mobile (use 09XXXXXXXXX)"
+            elif rfid in existing_rfids:
+                row.error = "RFID already exists in the system"
+            elif rfid in seen_rfids:
+                row.error = "Duplicate RFID earlier in this file"
+            else:
+                section_id = section_lookup.get((grade.lower(), section.lower()))
+                if section_id is None:
+                    row.error = f"Section not found: {grade} / {section}"
+                else:
+                    row.parent_phone = normalized
+                    row.section_id   = section_id
+                    row.valid        = True
+                    seen_rfids.add(rfid)
+        rows.append(row)
+    return rows, section_lookup
+
+
+@app.post("/students/import-csv/preview", response_model=CSVImportPreview, tags=["Students"])
+async def preview_csv_import(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Validate a CSV file without writing anything to the DB."""
+    content = await file.read()
+    rows, _ = _parse_csv_rows(content, db)
+    return CSVImportPreview(
+        total_rows  = len(rows),
+        valid_count = sum(1 for r in rows if r.valid),
+        error_count = sum(1 for r in rows if not r.valid),
+        rows        = rows,
+    )
+
+
+@app.post("/students/import-csv", response_model=CSVImportResult, tags=["Students"])
+async def import_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Import valid CSV rows. Rows with errors are skipped."""
+    content = await file.read()
+    rows, _ = _parse_csv_rows(content, db)
+    created  = 0
+    errors: list[str] = []
+    for r in rows:
+        if not r.valid or r.section_id is None:
+            if r.error:
+                errors.append(f"Row {r.row}: {r.error}")
+            continue
+        student = Student(
+            rfid_uid     = r.rfid_uid,
+            full_name    = r.full_name,
+            section_id   = r.section_id,
+            parent_name  = r.parent_name,
+            parent_phone = r.parent_phone,
+        )
+        db.add(student)
+        created += 1
+    db.commit()
+    logger.info(f"CSV import: created {created}, skipped {len(rows) - created}")
+    return CSVImportResult(created=created, skipped=len(rows) - created, errors=errors)
+
+
 # ── Attendance ────────────────────────────────────────────────────────────────
 
 @app.get("/attendance", response_model=list[AttendanceOut], tags=["Attendance"])
@@ -417,6 +569,11 @@ def get_sms_logs(limit: int = 50, db: Session = Depends(get_db)):
 
 
 # ── System Status ─────────────────────────────────────────────────────────────
+
+@app.get("/ping", tags=["System"])
+def ping():
+    return {"ok": True}
+
 
 @app.get("/status", tags=["System"])
 def system_status():

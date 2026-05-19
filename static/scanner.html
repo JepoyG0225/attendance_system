@@ -249,6 +249,40 @@
       position: fixed; top: -9999px; left: -9999px;
       opacity: 0; width: 1px; height: 1px;
     }
+
+    /* ── Connection badge (bottom-right) ────────────────────────────────── */
+    #conn-badge {
+      position: fixed; bottom: 14px; right: 14px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 14px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 20px;
+      font-size: .78rem; font-weight: 600;
+      color: rgba(255,255,255,.55);
+      backdrop-filter: blur(8px);
+      z-index: 20;
+      transition: color .25s, border-color .25s, background .25s;
+    }
+    #conn-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #9aa0a6;
+    }
+    #conn-badge.connected { color: #fff; border-color: rgba(0,200,83,.4); }
+    #conn-badge.connected .dot {
+      background: var(--green);
+      animation: conn-pulse 2s ease-out infinite;
+    }
+    #conn-badge.disconnected {
+      color: #ffcdd2;
+      border-color: rgba(255,23,68,.45);
+      background: rgba(255,23,68,.12);
+    }
+    #conn-badge.disconnected .dot { background: var(--red); }
+    @keyframes conn-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(0,200,83,.55); }
+      100% { box-shadow: 0 0 0 8px rgba(0,200,83,0); }
+    }
   </style>
 </head>
 <body>
@@ -320,6 +354,12 @@
 <!-- Hidden RFID input — always focused -->
 <input id="rfid-input" type="text" autocomplete="off" />
 
+<!-- Connection badge -->
+<div id="conn-badge" title="Server connection">
+  <span class="dot"></span>
+  <span id="conn-text">Connecting…</span>
+</div>
+
 <script>
 // ── URL params ────────────────────────────────────────────────────────────────
 const params    = new URLSearchParams(window.location.search);
@@ -347,6 +387,27 @@ fetch(`${API}/status`).then(r => r.json()).then(s => {
   document.getElementById('school-name').textContent = s.school;
   document.getElementById('idle-school').textContent = s.school;
 }).catch(() => {});
+
+// ── Server connection badge ───────────────────────────────────────────────────
+const $connBadge = document.getElementById('conn-badge');
+const $connText  = document.getElementById('conn-text');
+let lastConnState = null;
+async function pollServerConn() {
+  let ok = false;
+  try {
+    const ctrl = new AbortController();
+    const t   = setTimeout(() => ctrl.abort(), 3000);
+    const r   = await fetch(`${API}/ping`, { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(t);
+    ok = r.ok;
+  } catch { ok = false; }
+  if (ok === lastConnState) return;
+  lastConnState = ok;
+  $connBadge.classList.toggle('connected', ok);
+  $connBadge.classList.toggle('disconnected', !ok);
+  $connText.textContent = ok ? 'Connected' : 'Disconnected';
+}
+setInterval(pollServerConn, 5000); pollServerConn();
 
 // ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock() {

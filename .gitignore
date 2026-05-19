@@ -2,3 +2,20 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Claude Code workspace
+.claude/
+
+# Build artifacts
+dist/
+build/
+
+# macOS Finder duplicate artifacts
+* 2.sh
+* 2.py
+* 2.html
+* 2.bat
+
+# Local runtime files
+/tmp/
+*.log

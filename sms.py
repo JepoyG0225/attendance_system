@@ -19,6 +19,7 @@ from serial.tools import list_ports
 import time
 import logging
 import threading
+import os
 from dataclasses import dataclass
 from typing import Optional, Any
 from config import (
@@ -64,25 +65,89 @@ def _looks_like_gsm_port(p: Any) -> bool:
     return any(k in text for k in keywords)
 
 
+def _port_exists(device: str) -> bool:
+    return bool(device) and os.path.exists(device)
+
+
+def _port_score(p: Any, preferred_ports: set[str]) -> int:
+    device = (p.device or "").lower()
+    text = " ".join([
+        p.device or "",
+        p.description or "",
+        p.manufacturer or "",
+        p.product or "",
+        p.hwid or "",
+    ]).lower()
+
+    score = 0
+    is_gsm_like = _looks_like_gsm_port(p)
+    is_serial_path = any(token in device for token in ("usbserial", "usbmodem", "ttyusb", "ttyacm"))
+    is_windows_com = device.startswith("com")
+    if not (is_gsm_like or is_serial_path or is_windows_com):
+        return -999
+
+    if p.device in preferred_ports:
+        score += 50
+    if is_gsm_like:
+        score += 35
+
+    positive_patterns = (
+        "usbserial", "usb modem", "modem", "simcom", "quectel",
+        "huawei", "zte", "cp210", "ch340", "ftdi", "ttyusb", "ttyacm",
+    )
+    if any(k in text for k in positive_patterns):
+        score += 20
+
+    if device.startswith("/dev/cu."):
+        score += 8
+    if device.startswith("/dev/tty."):
+        score += 4
+    if device.startswith("com"):
+        score += 6
+
+    negative_patterns = ("bluetooth", "irda", "debug", "wireless")
+    if any(k in text for k in negative_patterns):
+        score -= 60
+
+    return score
+
+
 def _resolve_modem_ports() -> None:
     global _PORTS_RESOLVED
-    if _PORTS_RESOLVED or not GSM_AUTO_DETECT_PORTS or SIMULATION_MODE:
+    if not GSM_AUTO_DETECT_PORTS or SIMULATION_MODE:
         return
 
     ports = list(list_ports.comports())
     if not ports:
         logger.warning("No serial ports detected for GSM auto-detection.")
-        _PORTS_RESOLVED = True
         return
 
-    candidates = [p.device for p in ports if _looks_like_gsm_port(p)]
+    configured_ports = {
+        GSM_PRIMARY.get("port", ""),
+        GSM_SECONDARY.get("port", ""),
+    }
+    preferred_existing = {port for port in configured_ports if _port_exists(port)}
 
-    if not candidates:
+    scored = []
+    for port_obj in ports:
+        score = _port_score(port_obj, preferred_existing)
+        if score > 0:
+            scored.append((score, port_obj.device))
+
+    if not scored:
         logger.warning(
-            "GSM auto-detection found no modem-like serial device. "
+            "GSM auto-detection found no suitable serial device. "
             "Keeping configured GSM ports unchanged."
         )
-        _PORTS_RESOLVED = True
+        return
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    candidates: list[str] = []
+    for _, device in scored:
+        if device and device not in candidates:
+            candidates.append(device)
+
+    if not candidates:
         return
 
     GSM_PRIMARY["port"] = candidates[0]
@@ -91,7 +156,8 @@ def _resolve_modem_ports() -> None:
         GSM_SECONDARY["port"] = candidates[1]
         logger.info(f"Auto-detected GSM secondary port: {GSM_SECONDARY['port']}")
     else:
-        GSM_SECONDARY["port"] = candidates[0]
+        GSM_SECONDARY["port"] = ""
+        logger.info("Only one GSM modem detected; fallback unavailable.")
 
     _PORTS_RESOLVED = True
 
@@ -196,37 +262,79 @@ def send_sms(phone: str, message: str) -> SMSResult:
     return SMSResult(success=False, modem_used=None, error=combined)
 
 
-def test_modem(modem_cfg: dict) -> tuple[bool, str]:
-    """Check one modem's status and signal strength."""
+def _parse_signal(raw: str) -> tuple[Optional[int], str]:
+    """Parse AT+CSQ response into (rssi, human label). 99 = unknown."""
+    import re
+    m = re.search(r"\+CSQ:\s*(\d+)", raw)
+    if not m:
+        return None, "Unknown"
+    rssi = int(m.group(1))
+    if rssi == 99:
+        return None, "Unknown"
+    if rssi <= 9:
+        return rssi, "Very weak"
+    if rssi <= 14:
+        return rssi, "OK"
+    if rssi <= 19:
+        return rssi, "Good"
+    return rssi, "Excellent"
+
+
+def test_modem(modem_cfg: dict) -> dict:
+    """Check one modem's status and signal strength. Returns full info dict."""
+    label = modem_cfg.get("label", "Modem")
+    port  = modem_cfg.get("port", "")
+    info  = {"ok": False, "label": label, "port": port, "signal_rssi": None,
+             "signal_label": "", "message": ""}
+
     if SIMULATION_MODE:
-        return True, f"Simulation — {modem_cfg['label']} check skipped"
+        info.update(ok=True, message="Simulation — check skipped",
+                    signal_label="Simulation")
+        return info
+
     _resolve_modem_ports()
+    info["port"] = modem_cfg.get("port", "")
+
+    if not info["port"] or not _port_exists(info["port"]):
+        info["message"] = "Not detected"
+        return info
+
     try:
         with _MODEM_IO_LOCK:
-            with serial.Serial(modem_cfg["port"], modem_cfg["baudrate"], timeout=modem_cfg["timeout"]) as ser:
+            with serial.Serial(info["port"], modem_cfg["baudrate"], timeout=modem_cfg["timeout"]) as ser:
                 time.sleep(0.5)
                 ser.flushInput()
                 resp = _send_at(ser, "AT")
                 if "OK" not in resp:
-                    return False, f"No response on {modem_cfg['port']}"
-                sig = _send_at(ser, "AT+CSQ").strip()
-                # AT+CSQ returns +CSQ: <rssi>,<ber>
-                # rssi 0–9 = very weak, 10–14 = OK, 15–19 = good, 20–31 = excellent, 99 = unknown
-                return True, f"{modem_cfg['label']} OK | Signal: {sig}"
-    except serial.SerialException as e:
-        return False, f"{modem_cfg['label']} — {e}"
+                    info["message"] = f"No response on {info['port']}"
+                    return info
+                sig_raw = _send_at(ser, "AT+CSQ").strip()
+                rssi, sig_label = _parse_signal(sig_raw)
+                info.update(ok=True, signal_rssi=rssi, signal_label=sig_label,
+                            message=f"OK | Signal: {sig_label}"
+                                    + (f" ({rssi}/31)" if rssi is not None else ""))
+                return info
+    except (serial.SerialException, OSError) as e:
+        info["message"] = str(e)
+        return info
+    except Exception as e:
+        logger.warning(f"[{label}] Unexpected error in test_modem: {e}")
+        info["message"] = f"Unexpected: {e}"
+        return info
 
 
 def test_all_modems() -> dict:
     """Return status of both modems. Used by the /status endpoint."""
     _resolve_modem_ports()
-    p_ok, p_msg = test_modem(GSM_PRIMARY)
+    primary = test_modem(GSM_PRIMARY)
     if GSM_FALLBACK_ENABLED:
-        s_ok, s_msg = test_modem(GSM_SECONDARY)
+        secondary = test_modem(GSM_SECONDARY)
     else:
-        s_ok, s_msg = True, "Fallback disabled"
+        secondary = {"ok": False, "label": GSM_SECONDARY.get("label", "Secondary"),
+                     "port": "", "signal_rssi": None, "signal_label": "",
+                     "message": "Fallback disabled"}
     return {
-        "primary":  {"ok": p_ok, "label": GSM_PRIMARY["label"],   "message": p_msg},
-        "secondary": {"ok": s_ok, "label": GSM_SECONDARY["label"], "message": s_msg},
+        "primary":          primary,
+        "secondary":        secondary,
         "fallback_enabled": GSM_FALLBACK_ENABLED,
     }

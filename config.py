@@ -4,6 +4,7 @@ Attendance System Configuration
 SIMULATION_MODE = True  → Test on any PC without RFID reader or GSM modem
 SIMULATION_MODE = False → Production mode on the school PC with real hardware
 """
+import os
 
 # ── Simulation / Hardware toggle ─────────────────────────────────────────────
 SIMULATION_MODE = False      # Set False when real hardware is connected
@@ -97,7 +98,7 @@ ABSENT_PM_HOUR   = 13   # 1:30 PM — check for afternoon no-shows
 ABSENT_PM_MINUTE = 30
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASE_PATH = "attendance.db"
+DATABASE_PATH = os.getenv("ATTENDANCE_DB_PATH", "attendance.db")
 
 # ── Web server ────────────────────────────────────────────────────────────────
 API_HOST = "0.0.0.0"    # 0.0.0.0 = accessible from other devices on same network

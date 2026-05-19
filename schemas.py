@@ -96,6 +96,39 @@ class StudentUpdate(BaseModel):
         return v
 
 
+# ── Bulk operations ───────────────────────────────────────────────────────────
+
+class BulkPromote(BaseModel):
+    student_ids:    list[int]
+    to_section_id:  int
+
+
+class CSVImportRow(BaseModel):
+    row:           int                       # 1-based, including header offset
+    rfid_uid:      str = ""
+    full_name:     str = ""
+    grade:         str = ""
+    section:       str = ""
+    parent_name:   str = ""
+    parent_phone:  str = ""
+    valid:         bool = False
+    error:         Optional[str] = None
+    section_id:    Optional[int] = None      # resolved when valid
+
+
+class CSVImportPreview(BaseModel):
+    total_rows:    int
+    valid_count:   int
+    error_count:   int
+    rows:          list[CSVImportRow]
+
+
+class CSVImportResult(BaseModel):
+    created:       int
+    skipped:       int
+    errors:        list[str]
+
+
 # ── Attendance ─────────────────────────────────────────────────────────────────
 
 class RFIDScan(BaseModel):
