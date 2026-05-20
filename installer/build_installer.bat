@@ -36,7 +36,26 @@ if not defined ISCC (
     exit /b 1
 )
 
+:: ── Pre-flight: required bundled assets ─────────────────────────────────────
+if not exist "drivers\CH341SER.EXE" (
+    echo.
+    echo [ERROR] Missing required driver file:
+    echo     installer\drivers\CH341SER.EXE
+    echo.
+    echo The CH340 USB-serial driver is bundled with the installer so school
+    echo PCs can talk to SIM800L-based GSM modems out of the box.
+    echo.
+    echo Download from:
+    echo   https://www.wch-ic.com/downloads/CH341SER_EXE.html
+    echo.
+    echo Save the file at the path above, then re-run this build script.
+    echo.
+    pause
+    exit /b 1
+)
+
 echo Using compiler: %ISCC%
+echo Driver bundled: drivers\CH341SER.EXE
 echo.
 
 :: ── Compile ─────────────────────────────────────────────────────────────────

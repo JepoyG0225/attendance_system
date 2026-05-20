@@ -92,6 +92,12 @@ Source: "..\windows\README_WINDOWS.md"; DestDir: "{app}\windows"; Flags: ignorev
 ; Post-install setup helper script (lives only in installer; used during Run section)
 Source: "post_install.cmd";      DestDir: "{app}\windows"; Flags: ignoreversion
 
+; CH340 USB-serial driver (for SIM800L modems and other CH340-based GSM sticks).
+; Download from https://www.wch-ic.com/downloads/CH341SER_EXE.html and place
+; at installer/drivers/CH341SER.EXE before building this installer.
+; Bundled into {app}\drivers so the user can re-run it later if needed.
+Source: "drivers\CH341SER.EXE";  DestDir: "{app}\drivers"; Flags: ignoreversion
+
 [Icons]
 ; Start Menu (always)
 Name: "{group}\Attendance System";        Filename: "{app}\windows\run_app.bat";    WorkingDir: "{app}"; IconFilename: "{app}\static\app-icon.ico"; Comment: "Open the Attendance System (native app)"
@@ -110,6 +116,16 @@ Name: "{app}\static\photos"; Permissions: users-modify
 Name: "{localappdata}\AttendanceSystem"
 
 [Run]
+; ── 0. CH340 USB-serial driver (required for SIM800L GSM modems) ─────────────
+;     Runs WCH's official installer in silent mode (/S). It's idempotent —
+;     if the driver is already installed, the installer just exits cleanly.
+;     We don't abort the install on driver-install failure (the rest of the
+;     app still works, you just can't talk to a CH340-based modem until you
+;     install the driver manually).
+Filename: "{app}\drivers\CH341SER.EXE"; Parameters: "/S"; \
+    StatusMsg: "Installing CH340 USB-serial driver (for GSM modems)..."; \
+    Flags: runhidden waituntilterminated skipifdoesntexist
+
 ; ── 1. Create venv and install dependencies ──────────────────────────────────
 Filename: "{app}\windows\post_install.cmd"; Parameters: "venv ""{app}"""; \
     StatusMsg: "Setting up Python environment (this may take a few minutes)..."; \
