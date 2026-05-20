@@ -163,6 +163,40 @@ class DailySummary(BaseModel):
     excused: int
 
 
+# ── Holiday ───────────────────────────────────────────────────────────────────
+
+class HolidayCreate(BaseModel):
+    date:         date
+    name:         str
+    is_recurring: bool = False
+
+
+class HolidayOut(BaseModel):
+    id:           int
+    date:         date
+    name:         str
+    is_recurring: bool
+    created_at:   datetime
+    model_config = {"from_attributes": True}
+
+
+# ── Scanner Heartbeat ─────────────────────────────────────────────────────────
+
+class HeartbeatIn(BaseModel):
+    scanner_id: str
+    label:      Optional[str] = None
+
+
+class HeartbeatOut(BaseModel):
+    scanner_id:   str
+    label:        Optional[str]
+    last_seen_at: datetime
+    seconds_ago:  int
+    online:       bool       # True if last_seen_at within ~90 sec
+    ip_address:   Optional[str]
+    model_config = {"from_attributes": True}
+
+
 # ── SMS Log ───────────────────────────────────────────────────────────────────
 
 class SMSLogOut(BaseModel):

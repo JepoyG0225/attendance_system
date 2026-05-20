@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendance System</title>
+  <link href="/static/fonts/montserrat.css" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
+      background: #ffffff;
+      color: #0f172a;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .splash {
+      position: fixed; inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 36px;
+      background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1f5f9 100%);
+      animation: fadeIn .4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    /* Logo container - shows image if it exists, falls back to text mark */
+    .logo-wrap {
+      position: relative;
+      width: 280px;
+      height: 280px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      animation: pop .6s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes pop {
+      0%   { transform: scale(.85); opacity: 0; }
+      60%  { transform: scale(1.04); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+
+    /* Text fallback if logo image isn't available */
+    .logo-text {
+      display: none;
+      font-weight: 900;
+      font-size: 3.4rem;
+      letter-spacing: .01em;
+      animation: pop .6s cubic-bezier(.34,1.56,.64,1);
+    }
+    .logo-text .nex,
+    .logo-text .dev { color: #1e3a8a; }
+    .logo-text .x   { color: #ea580c; }
+    .logo-text .sys {
+      display: block;
+      color: #0f172a;
+      font-size: 1rem;
+      letter-spacing: .3em;
+      text-align: right;
+      margin-top: -8px;
+      padding-right: 4px;
+    }
+
+    /* App title */
+    .app-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      color: #475569;
+      text-align: center;
+    }
+    .app-title strong { color: #0f172a; font-weight: 700; }
+
+    /* Loader */
+    .loader {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #64748b;
+      font-size: .82rem;
+      font-weight: 500;
+    }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid #cbd5e1;
+      border-top-color: #1e3a8a;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Footer */
+    .footer {
+      position: fixed;
+      bottom: 22px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: .72rem;
+      color: #94a3b8;
+      letter-spacing: .04em;
+    }
+    .footer .brand {
+      color: #475569;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="splash">
+    <div class="logo-wrap">
+      <!-- NexDev Systems company logo for the splash screen.
+           Drop a PNG at:  static/nds-logo.png  -->
+      <img id="logo" class="logo-img" src="nds-logo.png?v=1" alt="NexDev Systems" />
+      <div id="logo-fallback" class="logo-text">
+        <span><span class="nex">NEX</span><span class="x">X</span><span class="dev">DEV</span></span>
+        <span class="sys">SYSTEMS</span>
+      </div>
+    </div>
+
+    <div class="app-title">
+      <strong>Attendance System</strong>
+    </div>
+
+    <div class="loader">
+      <div class="spinner"></div>
+      <span id="loader-msg">Starting up…</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    Powered by <span class="brand">NexDev Systems</span>
+  </div>
+
+  <script>
+    // Swap to text logo if the image fails to load
+    const img = document.getElementById('logo');
+    img.addEventListener('error', () => {
+      img.style.display = 'none';
+      document.getElementById('logo-fallback').style.display = 'block';
+    });
+
+    // Friendly rotating status messages so a slow startup doesn't feel stuck
+    const msgs = [
+      'Starting up…',
+      'Connecting to database…',
+      'Loading attendance data…',
+      'Almost ready…',
+    ];
+    let i = 0;
+    setInterval(() => {
+      i = (i + 1) % msgs.length;
+      document.getElementById('loader-msg').textContent = msgs[i];
+    }, 1500);
+  </script>
+</body>
+</html>

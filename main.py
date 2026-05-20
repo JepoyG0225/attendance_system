@@ -16,14 +16,20 @@ import logging
 from datetime import date as date_type
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form
+import asyncio
+import json
+
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
+
+from events import bus as event_bus
 
 from database import (
     init_db, get_db,
     Grade, Section, Student, Attendance, SMSLog,
+    Holiday, ScannerHeartbeat,
     AttendanceStatus,
 )
 from schemas import (
@@ -33,9 +39,17 @@ from schemas import (
     AttendanceOut, RFIDScan, ScanResponse,
     BulkPromote, CSVImportRow, CSVImportPreview, CSVImportResult,
     DailySummary, SMSLogOut,
+    HolidayCreate, HolidayOut,
+    HeartbeatIn, HeartbeatOut,
 )
 from attendance import process_scan, get_daily_summary, check_absences
-from sms import test_all_modems, _resolve_modem_ports
+from sms import (
+    test_all_modems,
+    _resolve_modem_ports,
+    start_modem_watcher,
+    stop_modem_watcher,
+    rescan_modems,
+)
 from config import (
     SCHOOL_NAME, SIMULATION_MODE,
     ABSENT_AM_HOUR, ABSENT_AM_MINUTE,
@@ -76,10 +90,20 @@ scheduler.add_job(_run_absent_check, "cron",
 @app.on_event("shutdown")
 def shutdown_event():
     scheduler.shutdown(wait=False)
+    stop_modem_watcher()
 
 # Static files (dashboard, scanner, photos)
 os.makedirs("static/photos", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# ── Live event bus loop attachment ────────────────────────────────────────────
+# Sync route handlers run in a worker thread, so they can't grab the running
+# loop themselves. We capture it here on startup so event_bus.publish() can
+# hop back to the main loop via call_soon_threadsafe.
+@app.on_event("startup")
+async def _attach_event_loop():
+    event_bus.attach_loop(asyncio.get_running_loop())
 
 
 @app.on_event("startup")
@@ -89,7 +113,33 @@ def on_startup():
     mode = "SIMULATION" if SIMULATION_MODE else "PRODUCTION"
     logger.info(f"Attendance System v2 started | Mode: {mode}")
     logger.info(f"Absent SMS scheduled — AM: {ABSENT_AM_HOUR:02d}:{ABSENT_AM_MINUTE:02d} | PM: {ABSENT_PM_HOUR:02d}:{ABSENT_PM_MINUTE:02d}")
-    _resolve_modem_ports()
+    # Active-probe at startup so the boot-time assignment matches what we'd
+    # pick after a hot-plug — verified AT-responsive ports only.
+    _resolve_modem_ports(active_probe=True)
+    start_modem_watcher()
+    _prefill_ph_holidays()
+
+
+def _prefill_ph_holidays():
+    """Pre-fill the current year (and next year if we're in Nov/Dec) with
+    Philippine holidays. Idempotent — skips dates already present."""
+    from datetime import date as _d
+    db = SessionLocal()
+    try:
+        today = _d.today()
+        years = [today.year]
+        if today.month >= 11:                # roll next year in early
+            years.append(today.year + 1)
+        for y in years:
+            result = _sync_ph_year(y, db, include_specials=True)
+            if result["added"]:
+                logger.info(f"[PH Holidays] Pre-filled {result['added']} entries for {y}.")
+            else:
+                logger.info(f"[PH Holidays] {y} already has {result['skipped']} entries — no changes.")
+    except Exception as e:
+        logger.warning(f"[PH Holidays] Pre-fill skipped: {type(e).__name__}: {e}")
+    finally:
+        db.close()
 
 
 # ── Helper: build StudentOut from ORM object ──────────────────────────────────
@@ -128,7 +178,7 @@ def scanner_page():
 def rfid_scan(payload: RFIDScan, db: Session = Depends(get_db)):
     result = process_scan(payload.rfid_uid, db)
     student_out = _student_out(result["student"]) if result["student"] else None
-    return ScanResponse(
+    response = ScanResponse(
         success=result["success"],
         message=result["message"],
         student=student_out,
@@ -136,6 +186,61 @@ def rfid_scan(payload: RFIDScan, db: Session = Depends(get_db)):
         sms_sent=result["sms_sent"],
         action=result["action"],
         session=result.get("session"),
+    )
+
+    # Live broadcast to all connected dashboards (SSE). Only on a successful
+    # scan that produced an attendance row — error scans don't update the
+    # table, so no need to wake the UI.
+    if result["success"] and result.get("action") and result["action"] != "complete":
+        try:
+            event_bus.publish("scan", response.model_dump(mode="json"))
+        except Exception as e:
+            logger.warning(f"SSE publish failed: {e}")
+
+    return response
+
+
+# ── Live events (Server-Sent Events) ──────────────────────────────────────────
+
+@app.get("/events", tags=["System"])
+async def live_events(request: Request):
+    """
+    SSE stream of live system events. The dashboard opens this with
+    EventSource('/events') on page load and reacts to messages as they arrive.
+
+    Event types emitted today:
+      - scan: a card was tapped and an attendance row was written/updated.
+
+    Each message is plain SSE text — `event: <type>\\ndata: <json>\\n\\n`.
+    A keepalive comment is sent every 15 s so proxies/firewalls don't drop
+    an otherwise-idle connection.
+    """
+    async def event_gen():
+        q = event_bus.subscribe()
+        # Tell the client we're alive immediately.
+        yield ": connected\n\n"
+        try:
+            while True:
+                # Bail out if the client disconnected.
+                if await request.is_disconnected():
+                    break
+                try:
+                    evt = await asyncio.wait_for(q.get(), timeout=15.0)
+                    payload = json.dumps(evt["data"], default=str)
+                    yield f"event: {evt['type']}\ndata: {payload}\n\n"
+                except asyncio.TimeoutError:
+                    # 15-sec keepalive (any line starting with ':' is a comment)
+                    yield ": keepalive\n\n"
+        finally:
+            event_bus.unsubscribe(q)
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # tell nginx not to buffer if proxied
+        },
     )
 
 
@@ -402,13 +507,18 @@ def _parse_csv_rows(content: bytes, db: Session) -> tuple[list[CSVImportRow], di
     if missing_fields:
         raise HTTPException(400, f"CSV missing required column(s): {', '.join(missing_fields)}")
 
-    # Build (grade_lower, section_lower) -> section.id map
+    # Build (grade_lower, section_lower) -> section.id map.
+    # Defensive: skip sections whose grade row was deleted (orphaned FK).
     section_lookup: dict[tuple[str, str], int] = {}
     for sec in db.query(Section).join(Grade).all():
+        if sec.grade is None or not sec.grade.name or not sec.name:
+            continue
         section_lookup[(sec.grade.name.strip().lower(), sec.name.strip().lower())] = sec.id
 
-    # Existing RFIDs (case-insensitive)
-    existing_rfids = {r[0].upper() for r in db.query(Student.rfid_uid).all()}
+    # Existing RFIDs (case-insensitive). Skip None values just in case.
+    existing_rfids = {
+        r[0].upper() for r in db.query(Student.rfid_uid).all() if r[0]
+    }
     seen_rfids: set[str] = set()
 
     rows: list[CSVImportRow] = []
@@ -457,14 +567,20 @@ def _parse_csv_rows(content: bytes, db: Session) -> tuple[list[CSVImportRow], di
 @app.post("/students/import-csv/preview", response_model=CSVImportPreview, tags=["Students"])
 async def preview_csv_import(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Validate a CSV file without writing anything to the DB."""
-    content = await file.read()
-    rows, _ = _parse_csv_rows(content, db)
-    return CSVImportPreview(
-        total_rows  = len(rows),
-        valid_count = sum(1 for r in rows if r.valid),
-        error_count = sum(1 for r in rows if not r.valid),
-        rows        = rows,
-    )
+    try:
+        content = await file.read()
+        rows, _ = _parse_csv_rows(content, db)
+        return CSVImportPreview(
+            total_rows  = len(rows),
+            valid_count = sum(1 for r in rows if r.valid),
+            error_count = sum(1 for r in rows if not r.valid),
+            rows        = rows,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("CSV preview failed")
+        raise HTTPException(500, f"CSV preview failed: {type(e).__name__}: {e}")
 
 
 @app.post("/students/import-csv", response_model=CSVImportResult, tags=["Students"])
@@ -568,6 +684,191 @@ def get_sms_logs(limit: int = 50, db: Session = Depends(get_db)):
     return db.query(SMSLog).order_by(SMSLog.sent_at.desc()).limit(limit).all()
 
 
+# ── Holidays ──────────────────────────────────────────────────────────────────
+
+@app.get("/holidays", response_model=list[HolidayOut], tags=["Calendar"])
+def list_holidays(db: Session = Depends(get_db)):
+    return db.query(Holiday).order_by(Holiday.date).all()
+
+
+@app.post("/holidays", response_model=HolidayOut, status_code=201, tags=["Calendar"])
+def create_holiday(data: HolidayCreate, db: Session = Depends(get_db)):
+    existing = db.query(Holiday).filter(Holiday.date == data.date).first()
+    if existing:
+        raise HTTPException(400, f"A holiday on {data.date} already exists: {existing.name}")
+    h = Holiday(date=data.date, name=data.name.strip(), is_recurring=data.is_recurring)
+    db.add(h)
+    db.commit()
+    db.refresh(h)
+    return h
+
+
+@app.delete("/holidays/{holiday_id}", tags=["Calendar"])
+def delete_holiday(holiday_id: int, db: Session = Depends(get_db)):
+    h = db.query(Holiday).filter(Holiday.id == holiday_id).first()
+    if not h:
+        raise HTTPException(404, "Holiday not found")
+    db.delete(h)
+    db.commit()
+    return {"message": f"Holiday '{h.name}' deleted"}
+
+
+def _sync_ph_year(year: int, db: Session, include_specials: bool = True) -> dict:
+    """Core sync logic. Returns {added, skipped, items}. Idempotent."""
+    try:
+        import holidays as _hol
+    except ImportError:
+        raise HTTPException(500, "The `holidays` library is not installed in this environment.")
+
+    ph_cal = _hol.country_holidays("PH", years=year)
+    if not ph_cal:
+        return {"year": year, "added": 0, "skipped": 0, "items": []}
+
+    existing_dates = {
+        h.date for h in db.query(Holiday).filter(
+            Holiday.date >= date_type(year, 1, 1),
+            Holiday.date <= date_type(year, 12, 31),
+        ).all()
+    }
+
+    added: list[dict] = []
+    skipped = 0
+    for d, name in sorted(ph_cal.items()):
+        if not include_specials:
+            cat = getattr(ph_cal, "get_categories", lambda *_: set())(d)
+            if cat and "special" in {str(c).lower() for c in cat}:
+                continue
+        if d in existing_dates:
+            skipped += 1
+            continue
+        h = Holiday(date=d, name=str(name).strip(), is_recurring=False)
+        db.add(h)
+        added.append({"date": d.isoformat(), "name": h.name})
+
+    db.commit()
+    return {"year": year, "added": len(added), "skipped": skipped, "items": added}
+
+
+@app.post("/holidays/sync-ph", tags=["Calendar"])
+def sync_ph_holidays(
+    year:           int  = Query(..., ge=2000, le=2100),
+    include_specials: bool = Query(True),
+    db: Session = Depends(get_db),
+):
+    """Re-sync Philippine holidays for the requested year. Already runs
+    automatically on server startup; this endpoint is for manual top-ups."""
+    return _sync_ph_year(year, db, include_specials)
+
+
+# ── Scanner Heartbeats ────────────────────────────────────────────────────────
+
+from datetime import datetime, timedelta
+from fastapi import Request
+
+@app.post("/scanner-heartbeat", tags=["Scanning"])
+def scanner_heartbeat(data: HeartbeatIn, request: Request, db: Session = Depends(get_db)):
+    """Scanner clients (Pi / browser kiosk) ping this every ~30 sec so the
+    dashboard can show which scanners are online."""
+    hb = db.query(ScannerHeartbeat).filter(ScannerHeartbeat.scanner_id == data.scanner_id).first()
+    client_ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent", "")[:255]
+    if hb is None:
+        hb = ScannerHeartbeat(
+            scanner_id=data.scanner_id,
+            label=data.label,
+            ip_address=client_ip,
+            user_agent=ua,
+        )
+        db.add(hb)
+    else:
+        hb.label = data.label or hb.label
+        hb.ip_address = client_ip
+        hb.user_agent = ua
+        hb.last_seen_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/scanner-heartbeat", response_model=list[HeartbeatOut], tags=["Scanning"])
+def list_scanner_heartbeats(db: Session = Depends(get_db)):
+    now = datetime.utcnow()
+    out = []
+    for hb in db.query(ScannerHeartbeat).order_by(ScannerHeartbeat.scanner_id).all():
+        last = hb.last_seen_at
+        # SQLite returns naive datetimes; compare safely
+        if last is not None and last.tzinfo is not None:
+            last = last.replace(tzinfo=None)
+        seconds_ago = int((now - last).total_seconds()) if last else 999999
+        out.append(HeartbeatOut(
+            scanner_id   = hb.scanner_id,
+            label        = hb.label,
+            last_seen_at = hb.last_seen_at,
+            seconds_ago  = seconds_ago,
+            online       = seconds_ago < 90,
+            ip_address   = hb.ip_address,
+        ))
+    return out
+
+
+@app.delete("/scanner-heartbeat/{scanner_id}", tags=["Scanning"])
+def delete_scanner_heartbeat(scanner_id: str, db: Session = Depends(get_db)):
+    hb = db.query(ScannerHeartbeat).filter(ScannerHeartbeat.scanner_id == scanner_id).first()
+    if not hb:
+        raise HTTPException(404, "Scanner not found")
+    db.delete(hb)
+    db.commit()
+    return {"message": f"Scanner {scanner_id} removed from list"}
+
+
+# ── Reports ───────────────────────────────────────────────────────────────────
+
+@app.get("/reports/monthly", tags=["Reports"])
+def monthly_report(
+    year:       int,
+    month:      int,
+    format:     str = Query("xlsx", pattern="^(xlsx|pdf)$"),
+    section_id: Optional[int] = None,
+    grade_id:   Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """Download a monthly attendance report as Excel (.xlsx) or PDF.
+    Filter by section_id or grade_id; omit both for school-wide.
+    """
+    if month < 1 or month > 12:
+        raise HTTPException(400, "month must be between 1 and 12")
+    if year < 2000 or year > 2100:
+        raise HTTPException(400, "year out of range")
+
+    try:
+        from reports import build_xlsx, build_pdf
+    except ImportError as e:
+        raise HTTPException(500, f"Report dependencies missing: {e}. Install openpyxl + reportlab.")
+
+    label_parts = [f"{year}-{month:02d}"]
+    if section_id:
+        sec = db.query(Section).filter(Section.id == section_id).first()
+        if sec: label_parts.append(f"{(sec.grade.name if sec.grade else '').replace(' ','')}_{sec.name}")
+    elif grade_id:
+        g = db.query(Grade).filter(Grade.id == grade_id).first()
+        if g: label_parts.append(g.name.replace(" ", ""))
+    fname_stem = "attendance_" + "_".join(label_parts)
+
+    if format == "xlsx":
+        data = build_xlsx(year, month, db, section_id=section_id, grade_id=grade_id)
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{fname_stem}.xlsx"'},
+        )
+    else:
+        data = build_pdf(year, month, db, section_id=section_id, grade_id=grade_id)
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{fname_stem}.pdf"'},
+        )
+
+
 # ── System Status ─────────────────────────────────────────────────────────────
 
 @app.get("/ping", tags=["System"])
@@ -587,6 +888,50 @@ def system_status():
             "pm": f"{ABSENT_PM_HOUR:02d}:{ABSENT_PM_MINUTE:02d}",
         },
     }
+
+
+@app.get("/modems", tags=["System"])
+def list_modems():
+    """Current status of both GSM modems (port, signal, ok)."""
+    return test_all_modems()
+
+
+@app.post("/modems/rescan", tags=["System"])
+def modem_rescan():
+    """
+    Force a re-scan of USB serial ports right now. Use this after plugging
+    in a new GSM modem if you don't want to wait for the background watcher.
+    Returns the freshly-detected modem status.
+    """
+    return rescan_modems()
+
+
+@app.get("/modems/ports", tags=["System"])
+def list_serial_ports():
+    """
+    Debug endpoint: list every serial port the OS is reporting, with the
+    metadata pyserial exposes. Useful for diagnosing "Windows doesn't see
+    my dongle" or "wrong COM port got picked" issues.
+
+    Note: this does NOT open or probe the ports — read-only enumeration.
+    """
+    from serial.tools import list_ports as _lp
+    return [
+        {
+            "device":        p.device,
+            "name":          p.name,
+            "description":   p.description,
+            "manufacturer":  p.manufacturer,
+            "product":       p.product,
+            "serial_number": p.serial_number,
+            "vid":           p.vid,
+            "pid":           p.pid,
+            "hwid":          p.hwid,
+            "location":      p.location,
+            "interface":     p.interface,
+        }
+        for p in _lp.comports()
+    ]
 
 
 @app.post("/attendance/check-absent", tags=["Attendance"])

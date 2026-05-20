@@ -43,6 +43,11 @@ GSM_FALLBACK_ENABLED = True
 # When enabled, the system will replace modem "port" values with detected ports.
 GSM_AUTO_DETECT_PORTS = True
 
+# Hot-plug watcher: re-scan serial ports every N seconds so newly inserted
+# USB GSM modems are picked up automatically while the server is running.
+# Set to 0 to disable (detection still happens on send_sms / test_all_modems).
+GSM_HOTPLUG_POLL_SECONDS = 5
+
 # ── SMS message templates ─────────────────────────────────────────────────────
 # Placeholders: {student_name} {grade} {section} {time} {date} {school}
 
@@ -96,6 +101,13 @@ ABSENT_AM_HOUR   = 8    # 8:30 AM — check for morning no-shows
 ABSENT_AM_MINUTE = 30
 ABSENT_PM_HOUR   = 13   # 1:30 PM — check for afternoon no-shows
 ABSENT_PM_MINUTE = 30
+
+# ── School calendar ───────────────────────────────────────────────────────────
+# When True, weekends (Sat/Sun) are treated as non-school days — absent SMS
+# checks are skipped, and they're excluded from monthly reports.
+SKIP_WEEKENDS = True
+# Days of the week treated as weekend (0=Mon, 6=Sun). Default = Sat & Sun.
+WEEKEND_DAYS  = (5, 6)
 
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_PATH = os.getenv("ATTENDANCE_DB_PATH", "attendance.db")

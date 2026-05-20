@@ -3,724 +3,1567 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Student Attendance System</title>
+  <title>Attendance Admin</title>
   <link href="/static/fonts/montserrat.css" rel="stylesheet" />
   <style>
-    /* ── Reset & base ─────────────────────────────────────────────────── */
+    /* ── Reset & tokens ─────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --blue:   #1a73e8;
-      --green:  #1e8c45;
-      --red:    #d93025;
-      --yellow: #f9ab00;
-      --gray:   #5f6368;
-      --light:  #f8f9fa;
-      --border: #dadce0;
-      --card:   #ffffff;
-      --shadow: 0 1px 4px rgba(0,0,0,.12);
+      --brand:        #2563eb;
+      --brand-soft:   #eff4ff;
+      --brand-dark:   #1d4ed8;
+      --green:        #16a34a;
+      --green-soft:   #dcfce7;
+      --yellow:       #ca8a04;
+      --yellow-soft:  #fef3c7;
+      --red:          #dc2626;
+      --red-soft:     #fee2e2;
+      --indigo:       #4f46e5;
+      --indigo-soft:  #e0e7ff;
+      --text:         #0f172a;
+      --text-2:       #475569;
+      --text-3:       #94a3b8;
+      --bg:           #f8fafc;
+      --surface:      #ffffff;
+      --border:       #e2e8f0;
+      --border-2:     #cbd5e1;
+      --shadow-sm:    0 1px 2px rgba(15,23,42,.05);
+      --shadow:       0 1px 3px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.04);
+      --shadow-lg:    0 10px 30px rgba(15,23,42,.12);
+      --radius:       10px;
+      --radius-sm:    6px;
+      --radius-lg:    14px;
+      --sidebar-w:    260px;
+      --topbar-h:     64px;
     }
     body {
       font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
-      background: #f0f4f8;
-      color: #202124;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    input, select, textarea, button { font-family: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--brand); text-decoration: none; }
+
+    /* ── Layout: sidebar + content ──────────────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
       min-height: 100vh;
     }
-    input, select, textarea, button, table, th, td, label, code, pre {
-      font-family: "Montserrat", "Segoe UI", Arial, sans-serif;
+
+    /* ── Sidebar ────────────────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 18px 20px;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+    .sidebar-logo {
+      width: 84px; height: 84px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(15,23,42,.06);
+    }
+    .sidebar-logo img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .sidebar-brand .title {
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: .01em;
+      color: var(--text);
     }
 
-    /* ── Layout ───────────────────────────────────────────────────────── */
-    header {
-      background: var(--blue);
-      color: #fff;
-      padding: 14px 24px;
+    .sidebar-section {
+      padding: 16px 12px 6px;
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+    .nav-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 2px 6px rgba(0,0,0,.2);
+      gap: 12px;
+      padding: 10px 14px;
+      margin: 1px 8px;
+      border-radius: 8px;
+      color: var(--text-2);
+      font-size: .9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      border: none;
+      background: none;
+      width: calc(100% - 16px);
+      text-align: left;
     }
-    header h1 { font-size: 1.25rem; font-weight: 600; }
-    header small { font-size: .8rem; opacity: .85; }
-    #sim-badge {
-      background: #fbbc04;
-      color: #202124;
-      font-size: .7rem;
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active {
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .nav-item .icon { font-size: 1.1rem; width: 20px; text-align: center; }
+    .nav-item .badge {
+      margin-left: auto;
+      background: var(--brand);
+      color: #fff;
+      font-size: .68rem;
       font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 12px;
-      display: none;
-    }
-
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
-
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-bottom: 20px; }
-    @media (max-width: 700px) {
-      .grid-2, .grid-3 { grid-template-columns: 1fr; }
-    }
-
-    /* ── Cards ────────────────────────────────────────────────────────── */
-    .card {
-      background: var(--card);
+      padding: 2px 7px;
       border-radius: 10px;
-      padding: 20px;
-      box-shadow: var(--shadow);
     }
-    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 14px; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; }
 
-    /* ── RFID Scanner ─────────────────────────────────────────────────── */
-    #scanner-card { border-top: 4px solid var(--blue); }
-    #rfid-input {
-      width: 100%;
-      padding: 14px 16px;
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 14px;
+      border-top: 1px solid var(--border);
+      font-size: .76rem;
+      color: var(--text-3);
+    }
+    .sidebar-footer .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .sidebar-footer .row:last-child { margin-bottom: 0; }
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 6px;
+      box-shadow: 0 0 0 3px var(--green-soft);
+    }
+
+    /* ── Main column ────────────────────────────────────────────────────── */
+    .main { display: flex; flex-direction: column; min-width: 0; }
+
+    .topbar {
+      height: var(--topbar-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar h1 {
       font-size: 1.1rem;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      outline: none;
-      text-align: center;
-      letter-spacing: .15em;
-      transition: border-color .2s;
+      font-weight: 700;
+      margin: 0;
     }
-    #rfid-input:focus { border-color: var(--blue); }
-    #rfid-input::placeholder { color: #bbb; letter-spacing: normal; font-size: .95rem; }
-    #scan-hint { text-align: center; font-size: .82rem; color: var(--gray); margin-top: 8px; }
-
-    /* ── Scan result banner ───────────────────────────────────────────── */
-    #result-banner {
-      margin-top: 16px;
-      padding: 14px 18px;
-      border-radius: 8px;
-      display: none;
-      font-size: .95rem;
+    .topbar .subtitle {
+      font-size: .8rem;
+      color: var(--text-3);
       font-weight: 500;
     }
-    #result-banner.success { background: #e6f4ea; color: var(--green); border-left: 4px solid var(--green); }
-    #result-banner.error   { background: #fce8e6; color: var(--red);   border-left: 4px solid var(--red); }
-    #result-banner.warning { background: #fef7e0; color: #a07000;      border-left: 4px solid var(--yellow); }
-    #result-detail { font-size: .82rem; margin-top: 4px; font-weight: 400; opacity: .85; }
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: .76rem;
+      font-weight: 600;
+    }
+    .pill-sim    { background: var(--yellow-soft); color: var(--yellow); display: none; }
+    .pill-date   { background: var(--bg); color: var(--text-2); border: 1px solid var(--border); }
+    .pill-online { background: var(--green-soft); color: var(--green); }
+    .pill-school { background: var(--brand-soft); color: var(--brand); font-weight: 700; }
+    .pill-school:empty { display: none; }
+    .pill-live   { background: var(--green-soft); color: var(--green); transition: background .25s, color .25s; }
+    .pill-live.offline { background: rgba(255,23,68,.10); color: var(--red); }
+    .pill-live .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 0 currentColor;
+      animation: live-pulse 1.6s ease-out infinite;
+    }
+    .pill-live.offline .live-dot { animation: none; }
+    @keyframes live-pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(0,200,83,.55); }
+      70%  { box-shadow: 0 0 0 8px rgba(0,200,83,0);   }
+      100% { box-shadow: 0 0 0 0   rgba(0,200,83,0);   }
+    }
 
-    /* ── Stats ────────────────────────────────────────────────────────── */
-    .stat-card {
-      background: var(--card);
-      border-radius: 10px;
-      padding: 18px;
-      box-shadow: var(--shadow);
+    .mobile-toggle {
+      display: none;
+      background: none; border: none;
+      font-size: 1.3rem; color: var(--text-2);
+      padding: 6px;
+    }
+
+    /* ── Content area ───────────────────────────────────────────────────── */
+    .content {
+      padding: 24px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .page-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .page-header h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -.01em;
+    }
+    .page-header p {
+      font-size: .85rem;
+      color: var(--text-2);
+      margin-top: 4px;
+    }
+    .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ── Cards ──────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+    }
+    .card-pad { padding: 20px; }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-head h3 {
+      font-size: .95rem;
+      font-weight: 700;
+    }
+    .card-head .hint {
+      font-size: .78rem;
+      color: var(--text-3);
+    }
+    .card-body { padding: 16px 20px; }
+
+    .grid { display: grid; gap: 16px; }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-2 { grid-template-columns: 1fr 1fr; }
+    .grid-2-1 { grid-template-columns: 2fr 1fr; }
+    @media (max-width: 1024px) {
+      .grid-4, .grid-3, .grid-2, .grid-2-1 { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 700px) {
+      .grid-4, .grid-3, .grid-2, .grid-2-1 { grid-template-columns: 1fr; }
+    }
+
+    /* ── Stat cards ─────────────────────────────────────────────────────── */
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--brand);
+    }
+    .stat.stat-present::before { background: var(--green); }
+    .stat.stat-late::before    { background: var(--yellow); }
+    .stat.stat-absent::before  { background: var(--red); }
+    .stat-label {
+      font-size: .76rem;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      font-weight: 600;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+    }
+    .stat-foot {
+      font-size: .75rem;
+      color: var(--text-3);
+      margin-top: auto;
+    }
+    .stat-present .stat-value { color: var(--green); }
+    .stat-late .stat-value    { color: var(--yellow); }
+    .stat-absent .stat-value  { color: var(--red); }
+
+    /* ── Buttons ────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: .85rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+      transition: background .15s, opacity .15s, transform .04s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary   { background: var(--brand); color: #fff; }
+    .btn-primary:hover   { background: var(--brand-dark); }
+    .btn-success   { background: var(--green); color: #fff; }
+    .btn-success:hover   { opacity: .9; }
+    .btn-danger    { background: var(--red); color: #fff; }
+    .btn-danger:hover    { opacity: .9; }
+    .btn-secondary { background: var(--bg); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-outline   { background: var(--surface); color: var(--brand); border-color: var(--border-2); }
+    .btn-outline:hover { background: var(--brand-soft); }
+    .btn-sm        { padding: 5px 10px; font-size: .76rem; }
+    .btn-icon-only { padding: 6px 9px; }
+    .btn:disabled  { opacity: .5; cursor: not-allowed; }
+
+    /* ── Inputs ─────────────────────────────────────────────────────────── */
+    .input, .select {
+      padding: 8px 12px;
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      font-size: .88rem;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .input:focus, .select:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px var(--brand-soft);
+    }
+    .input-lg {
+      padding: 12px 16px;
+      font-size: 1rem;
+      letter-spacing: .12em;
       text-align: center;
     }
-    .stat-card .value { font-size: 2.2rem; font-weight: 700; }
-    .stat-card .label { font-size: .8rem; color: var(--gray); text-transform: uppercase; margin-top: 4px; }
-    .stat-present .value { color: var(--green); }
-    .stat-late    .value { color: var(--yellow); }
-    .stat-absent  .value { color: var(--red); }
+    .input-search {
+      padding-left: 36px;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'><circle cx='11' cy='11' r='8'/><path d='M21 21l-4.35-4.35'/></svg>");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+    }
+    .toolbar {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
 
-    /* ── Date picker ──────────────────────────────────────────────────── */
-    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-    .toolbar input[type=date], .toolbar input[type=text], .toolbar select {
-      padding: 7px 11px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: .9rem;
-      outline: none;
-    }
-    .btn {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 6px;
-      font-size: .88rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity .15s;
-    }
-    .btn:hover { opacity: .85; }
-    .btn-primary   { background: var(--blue);  color: #fff; }
-    .btn-success   { background: var(--green); color: #fff; }
-    .btn-danger    { background: var(--red);   color: #fff; }
-    .btn-secondary { background: #e0e0e0; color: #333; }
-    .btn-outline {
-      background: #fff;
-      color: var(--blue);
-      border: 1px solid #c7d7ff;
-    }
-    .btn-outline:hover { background: #eef3ff; }
-
-    /* ── Tables ───────────────────────────────────────────────────────── */
+    /* ── Tables ─────────────────────────────────────────────────────────── */
     .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-    th { background: var(--light); color: var(--gray); font-weight: 600; text-transform: uppercase; font-size: .75rem; letter-spacing: .04em; padding: 10px 12px; text-align: left; border-bottom: 2px solid var(--border); }
-    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+    th {
+      background: var(--bg);
+      color: var(--text-3);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: .68rem;
+      letter-spacing: .06em;
+      padding: 10px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #f5f7fa; }
+    tbody tr:hover td { background: var(--bg); }
+    .clickable-row { cursor: pointer; }
+    .empty {
+      text-align: center;
+      color: var(--text-3);
+      padding: 36px 20px;
+      font-size: .9rem;
+    }
+    .empty .empty-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+      opacity: .4;
+    }
+    code {
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: .78rem;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    }
+    .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--border);
+    }
+    .avatar-placeholder {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #2563eb);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem;
+      font-weight: 700;
+    }
 
-    /* ── Status chips ─────────────────────────────────────────────────── */
+    /* ── Chips ──────────────────────────────────────────────────────────── */
     .chip {
       display: inline-block;
       padding: 3px 10px;
-      border-radius: 12px;
-      font-size: .75rem;
-      font-weight: 600;
+      border-radius: 999px;
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .04em;
       text-transform: uppercase;
     }
-    .chip-present { background: #e6f4ea; color: var(--green); }
-    .chip-late    { background: #fef7e0; color: #a07000; }
-    .chip-absent  { background: #fce8e6; color: var(--red); }
-    .chip-excused { background: #e8eaf6; color: #3949ab; }
-    .chip-sent    { background: #e6f4ea; color: var(--green); }
-    .chip-failed  { background: #fce8e6; color: var(--red); }
-    .chip-pending { background: #fff3e0; color: #e65100; }
-    .chip-queued  { background: #fff3e0; color: #e65100; }
+    .chip-present { background: var(--green-soft);  color: var(--green); }
+    .chip-late    { background: var(--yellow-soft); color: var(--yellow); }
+    .chip-absent  { background: var(--red-soft);    color: var(--red); }
+    .chip-excused { background: var(--indigo-soft); color: var(--indigo); }
+    .chip-sent    { background: var(--green-soft);  color: var(--green); }
+    .chip-failed  { background: var(--red-soft);    color: var(--red); }
+    .chip-queued, .chip-pending { background: var(--yellow-soft); color: var(--yellow); }
 
-    /* ── Tabs ─────────────────────────────────────────────────────────── */
-    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
-    .tab {
-      padding: 10px 18px;
-      font-size: .9rem;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      background: none;
-      color: var(--gray);
-      border-bottom: 3px solid transparent;
-      margin-bottom: -2px;
-      transition: color .15s;
-    }
-    .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-
-    /* ── Modal ────────────────────────────────────────────────────────── */
+    /* ── Modals ─────────────────────────────────────────────────────────── */
     .modal-overlay {
       display: none;
       position: fixed; inset: 0;
-      background: rgba(0,0,0,.45);
+      background: rgba(15, 23, 42, .5);
       z-index: 100;
       align-items: center;
       justify-content: center;
+      padding: 16px;
+      backdrop-filter: blur(2px);
     }
     .modal-overlay.open { display: flex; }
     .modal {
-      background: #fff;
-      border-radius: 12px;
-      padding: 28px;
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      max-width: 480px;
       width: 100%;
-      max-width: 460px;
-      box-shadow: 0 8px 30px rgba(0,0,0,.2);
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
     }
-    .modal h3 { font-size: 1.1rem; margin-bottom: 18px; }
+    .modal-lg { max-width: 720px; }
+    .modal-xl { max-width: 960px; }
+    .modal h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .modal-subtitle {
+      font-size: .82rem;
+      color: var(--text-2);
+      margin-bottom: 18px;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
     .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; font-size: .85rem; font-weight: 600; color: var(--gray); margin-bottom: 5px; }
-    .form-group input, .form-group select {
-      width: 100%;
-      padding: 9px 12px;
-      border: 1px solid var(--border);
+    .form-group label {
+      display: block;
+      font-size: .78rem;
+      color: var(--text-2);
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .form-group .input,
+    .form-group .select { width: 100%; }
+    .form-group small { color: var(--text-3); font-size: .75rem; display: block; margin-top: 4px; }
+    .form-error {
+      display: none;
+      background: var(--red-soft);
+      color: var(--red);
+      border: 1px solid #fca5a5;
+      padding: 8px 12px;
       border-radius: 6px;
-      font-size: .92rem;
-      outline: none;
+      font-size: .82rem;
+      margin-top: 10px;
     }
-    .form-group input:focus, .form-group select:focus { border-color: var(--blue); }
-    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
-    .form-error { font-size: .8rem; color: var(--red); margin-top: 4px; display: none; }
+    .form-error.show { display: block; }
 
-    /* ── Loading ──────────────────────────────────────────────────────── */
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: var(--blue); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading { display: none; }
-
-    /* ── Toast ────────────────────────────────────────────────────────── */
+    /* ── Toast ──────────────────────────────────────────────────────────── */
     #toast {
-      position: fixed; bottom: 72px; right: 24px;
-      background: #323232; color: #fff;
-      padding: 12px 20px; border-radius: 8px;
-      font-size: .88rem; opacity: 0;
-      transition: opacity .3s;
-      pointer-events: none; z-index: 200;
-    }
-    #toast.show { opacity: 1; }
-
-    /* ── GSM Modules card (Dashboard) ──────────────────────────────────── */
-    .gsm-list { display: flex; flex-direction: column; gap: 10px; }
-    .gsm-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 12px;
-      background: var(--light);
-      border: 1px solid var(--border);
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--text);
+      color: #fff;
+      padding: 12px 18px;
       border-radius: 8px;
-      transition: border-color .2s, background .2s;
+      font-size: .88rem;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: all .2s;
+      z-index: 200;
     }
-    .gsm-row.ok     { background: #e6f4ea; border-color: rgba(30,140,69,.35); }
-    .gsm-row.fail   { background: #fce8e6; border-color: rgba(217,48,37,.25); }
-    .gsm-row.sim    { background: #fef7e0; border-color: rgba(249,171,0,.4); }
-    .gsm-dot {
-      width: 11px; height: 11px; border-radius: 50%;
-      background: #bdc1c6; flex-shrink: 0;
+    #toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ── Activity feed ──────────────────────────────────────────────────── */
+    .activity-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
     }
-    .gsm-row.ok   .gsm-dot { background: var(--green); box-shadow: 0 0 0 3px rgba(30,140,69,.18); }
-    .gsm-row.fail .gsm-dot { background: var(--red);   box-shadow: 0 0 0 3px rgba(217,48,37,.16); }
-    .gsm-row.sim  .gsm-dot { background: var(--yellow); }
-    .gsm-info { flex: 1; min-width: 0; }
-    .gsm-line1 {
-      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-      font-size: .9rem; font-weight: 600; color: #202124;
+    .activity-item:last-child { border-bottom: none; }
+    .activity-item .avatar,
+    .activity-item .avatar-placeholder { flex-shrink: 0; }
+    .activity-body { flex: 1; min-width: 0; }
+    .activity-body .name { font-weight: 600; font-size: .9rem; }
+    .activity-body .meta { font-size: .78rem; color: var(--text-3); margin-top: 2px; }
+    .activity-time { font-size: .78rem; color: var(--text-3); white-space: nowrap; }
+
+    /* ── Chart container ────────────────────────────────────────────────── */
+    .chart-wrap {
+      position: relative;
+      height: 240px;
+      width: 100%;
     }
-    .gsm-tag {
-      font-size: .68rem; font-weight: 700; letter-spacing: .04em;
-      padding: 2px 7px; border-radius: 10px;
-      background: #e8eaf6; color: #3949ab;
+    .chart-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-3);
+      font-size: .85rem;
     }
-    .gsm-tag.fallback { background: #fff3e0; color: #b06200; }
-    .gsm-line2 {
-      font-size: .78rem; color: var(--gray); margin-top: 2px;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+
+    /* ── Pages ──────────────────────────────────────────────────────────── */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Modem status chip ──────────────────────────────────────────────── */
+    .modem-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 200px;
     }
-    .gsm-port {
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      font-size: .72rem; color: var(--gray);
+    .modem-card.ok    { border-left: 3px solid var(--green); }
+    .modem-card.error { border-left: 3px solid var(--red); }
+    .modem-name { font-size: .82rem; font-weight: 700; }
+    .modem-meta { font-size: .72rem; color: var(--text-3); }
+
+    /* ── Schedule card ──────────────────────────────────────────────────── */
+    .schedule-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
     }
-    #gsm-refreshed {
-      font-size: .72rem; color: var(--gray); margin-top: 10px;
+    .schedule-item:last-child { border-bottom: none; }
+    .schedule-time {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--brand);
     }
+
+    /* ── Responsive: collapse sidebar ───────────────────────────────────── */
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        width: 260px;
+        z-index: 50;
+        transition: left .2s;
+        box-shadow: var(--shadow-lg);
+      }
+      .sidebar.open { left: 0; }
+      .mobile-toggle { display: block; }
+      .topbar { padding: 0 16px; }
+      .content { padding: 16px; }
+    }
+
+    /* ── Scrollbar polish ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
   </style>
 </head>
 <body>
 
-<header>
-  <div>
-    <h1 id="school-title">Student Attendance System</h1>
-    <small id="clock"></small>
-  </div>
-  <div style="display:flex;align-items:center;gap:14px">
-    <span id="sim-badge">SIMULATION MODE</span>
-    <img src="/static/logo.png" alt="School Logo"
-      style="height:48px;width:48px;object-fit:contain;border-radius:50%;flex-shrink:0" />
-  </div>
-</header>
-
-<div class="container">
-
-  <!-- ── Tabs ──────────────────────────────────────────────────────────── -->
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('scanner')">Dashboard</button>
-    <button class="tab" onclick="switchTab('attendance')">Attendance</button>
-    <button class="tab" onclick="switchTab('students')">Students</button>
-    <button class="tab" onclick="switchTab('classes')">Grades &amp; Sections</button>
-    <button class="tab" onclick="switchTab('sms')">SMS Logs</button>
-  </div>
+<div class="app">
 
   <!-- ══════════════════════════════════════════════════════════════════════
-       TAB 1 — SCANNER
+       SIDEBAR
   ═══════════════════════════════════════════════════════════════════════════ -->
-  <div id="tab-scanner" class="tab-content active">
-
-    <!-- Daily stats -->
-    <div class="grid-3" id="stats-row">
-      <div class="stat-card stat-present"><div class="value" id="cnt-present">-</div><div class="label">Present</div></div>
-      <div class="stat-card stat-late">   <div class="value" id="cnt-late">-</div>   <div class="label">Late</div></div>
-      <div class="stat-card stat-absent"> <div class="value" id="cnt-absent">-</div> <div class="label">Absent</div></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo"><img src="/static/logo.png" alt="School logo" /></div>
+      <div class="title">Attendance System</div>
     </div>
 
-    <div class="grid-2">
-      <div class="card">
-        <h2>GSM Modules</h2>
-        <p style="font-size:.85rem;color:var(--gray);margin-bottom:12px">
-          USB modems auto-detected at runtime. The system uses the first as primary and falls back to the second.
-        </p>
-        <div id="gsm-list" class="gsm-list">
-          <div class="gsm-row"><span class="gsm-dot"></span><div class="gsm-info"><div class="gsm-line1">Detecting modems…</div></div></div>
-        </div>
-        <div id="gsm-refreshed"></div>
-      </div>
+    <div class="sidebar-section">Main</div>
+    <button class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
+      <span class="icon">📊</span> <span>Dashboard</span>
+    </button>
+    <button class="nav-item" data-page="attendance" onclick="switchPage('attendance')">
+      <span class="icon">📋</span> <span>Attendance</span>
+    </button>
+    <button class="nav-item" data-page="students" onclick="switchPage('students')">
+      <span class="icon">👥</span> <span>Students</span>
+    </button>
+    <button class="nav-item" data-page="classes" onclick="switchPage('classes')">
+      <span class="icon">🏫</span> <span>Grades &amp; Sections</span>
+    </button>
+    <button class="nav-item" data-page="reports" onclick="switchPage('reports')">
+      <span class="icon">📑</span> <span>Reports</span>
+    </button>
+    <button class="nav-item" data-page="calendar" onclick="switchPage('calendar')">
+      <span class="icon">📅</span> <span>Calendar</span>
+    </button>
 
-      <!-- Absent SMS Schedule -->
-      <div class="card" style="margin-bottom:20px">
-        <h2>Absent SMS Automation</h2>
-        <p style="font-size:.85rem;color:var(--gray);margin-bottom:14px">
-          The system automatically checks for absent students and sends SMS to parents at the times below.
-        </p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
-          <div style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:12px 20px;text-align:center;min-width:140px">
-            <div style="font-size:.72rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.06em">Morning Check</div>
-            <div id="sched-am" style="font-size:1.5rem;font-weight:800;color:var(--blue);margin:4px 0">8:30 AM</div>
-            <div style="font-size:.75rem;color:var(--gray)">No morning scan → Absent</div>
+    <div class="sidebar-section">Notifications</div>
+    <button class="nav-item" data-page="sms" onclick="switchPage('sms')">
+      <span class="icon">💬</span> <span>SMS &amp; Modems</span>
+    </button>
+
+    <div class="sidebar-section">System</div>
+    <button class="nav-item" data-page="scanner" onclick="switchPage('scanner')">
+      <span class="icon">🔍</span> <span>RFID Scanner</span>
+    </button>
+    <button class="nav-item" data-page="system" onclick="switchPage('system')">
+      <span class="icon">⚙</span> <span>System Status</span>
+    </button>
+
+    <div class="sidebar-footer">
+      <div class="row">
+        <span><span class="status-dot"></span>Server online</span>
+        <span id="footer-version">v2.0</span>
+      </div>
+      <div class="row">
+        <span id="footer-mode">Production</span>
+        <span id="footer-time"></span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN
+  ═══════════════════════════════════════════════════════════════════════════ -->
+  <div class="main">
+
+    <!-- ── Top bar ──────────────────────────────────────────────────────── -->
+    <header class="topbar">
+      <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
+      <div>
+        <h1 id="page-title">Dashboard</h1>
+        <div class="subtitle" id="page-subtitle">Today's attendance at a glance</div>
+      </div>
+      <div class="topbar-right">
+        <span class="pill pill-school" id="topbar-school"></span>
+        <span class="pill pill-sim" id="sim-badge">⚙ Simulation Mode</span>
+        <span class="pill pill-live" id="live-indicator" title="Real-time event stream">
+          <span class="live-dot"></span><span id="live-text">Live</span>
+        </span>
+        <span class="pill pill-date" id="topbar-date"></span>
+      </div>
+    </header>
+
+    <!-- ── Content ──────────────────────────────────────────────────────── -->
+    <main class="content">
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: DASHBOARD
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page active" id="page-dashboard">
+
+        <!-- Scanner heartbeat strip -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-head">
+            <h3>Scanner Status</h3>
+            <span class="hint" id="scanner-hb-meta">Heartbeats from connected scanners</span>
           </div>
-          <div style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:12px 20px;text-align:center;min-width:140px">
-            <div style="font-size:.72rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.06em">Afternoon Check</div>
-            <div id="sched-pm" style="font-size:1.5rem;font-weight:800;color:var(--blue);margin:4px 0">1:30 PM</div>
-            <div style="font-size:.75rem;color:var(--gray)">No PM return → SMS parent</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:8px;margin-left:auto">
-            <button class="btn btn-secondary" style="font-size:.82rem" onclick="triggerAbsentCheck('am')">▶ Run AM Check Now</button>
-            <button class="btn btn-secondary" style="font-size:.82rem" onclick="triggerAbsentCheck('pm')">▶ Run PM Check Now</button>
+          <div class="card-body" id="scanner-hb-cards" style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="empty" style="padding:14px;width:100%">No scanners have reported yet. Pi scanners auto-register when running.</div>
           </div>
         </div>
-        <div id="absent-check-result" style="display:none;font-size:.85rem;padding:8px 12px;border-radius:6px"></div>
-      </div>
 
-      <!-- Recent scans -->
-      <div class="card">
-        <h2>Recent Scans Today</h2>
-        <div class="table-wrap">
-          <table id="recent-table">
-            <thead><tr><th>Name</th><th>Grade</th><th>AM In</th><th>AM Out</th><th>PM In</th><th>PM Out</th><th>Status</th></tr></thead>
-            <tbody id="recent-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       TAB 2 — ATTENDANCE
-  ═══════════════════════════════════════════════════════════════════════════ -->
-  <div id="tab-attendance" class="tab-content">
-    <div class="card">
-      <div class="toolbar">
-        <label for="att-date" style="font-size:.9rem;font-weight:600">Date:</label>
-        <input type="date" id="att-date" />
-        <button class="btn btn-primary" onclick="loadAttendance()">Load</button>
-        <input type="text" id="att-search" placeholder="Search student name..." style="flex:1;min-width:160px" oninput="filterAttendance()" />
-        <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th>Grade</th><th>Section</th><th>AM In</th><th>AM Out</th><th>PM In</th><th>PM Out</th><th>Status</th><th>Notes</th><th>Action</th></tr></thead>
-          <tbody id="att-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       TAB 3 — STUDENTS
-  ═══════════════════════════════════════════════════════════════════════════ -->
-  <div id="tab-students" class="tab-content">
-    <div class="card">
-      <div class="toolbar">
-        <input type="text" id="student-search" placeholder="Search by name..." oninput="filterStudents()" />
-        <button class="btn btn-primary" onclick="openCsvImportModal()">⬆ Import CSV</button>
-        <button class="btn btn-success" onclick="openRegisterModal()">+ Register Student</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Photo</th><th>Name</th><th>Grade</th><th>Section</th><th>Parent</th><th>Phone</th><th>RFID UID</th><th>Actions</th></tr></thead>
-          <tbody id="student-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       TAB 4 — GRADES & SECTIONS
-  ═══════════════════════════════════════════════════════════════════════════ -->
-  <div id="tab-classes" class="tab-content">
-    <div class="grid-2">
-
-      <!-- Grades column -->
-      <div class="card">
-        <h2>Grades</h2>
-        <div style="display:flex;gap:8px;margin-bottom:14px">
-          <input type="text" id="new-grade-name" placeholder="e.g. Grade 1" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none" />
-          <button class="btn btn-success" onclick="addGrade()">+ Add</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Grade Name</th><th>Sections</th><th>Students</th><th>Action</th></tr></thead>
-            <tbody id="grade-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Sections column -->
-      <div class="card">
-        <h2>Sections <span id="sections-grade-label" style="color:var(--blue);font-weight:400;font-size:.85rem"></span></h2>
-        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-          <select id="section-grade-select" onchange="loadSections(this.value)" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none">
-            <option value="">— Select a grade —</option>
-          </select>
-          <input type="text" id="new-section-name" placeholder="e.g. Sampaguita" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none" />
-          <button class="btn btn-success" onclick="addSection()">+ Add</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Section Name</th><th>Students</th><th>Action</th></tr></thead>
-            <tbody id="section-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- School Year Promotion -->
-    <div class="card" style="margin-top:20px">
-      <h2>School Year Promotion</h2>
-      <p style="color:var(--gray);font-size:.88rem;margin-bottom:16px">Move all students from one section to another — use this when advancing students to the next grade/section at the start of a new school year.</p>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
-        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px">
-          <label style="font-size:.8rem;font-weight:600;color:var(--gray)">FROM Section (current)</label>
-          <select id="promote-from" onchange="loadPromotePreview()" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none">
-            <option value="">— Select source section —</option>
-          </select>
-        </div>
-        <div style="font-size:1.4rem;padding-bottom:6px;color:var(--gray)">→</div>
-        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px">
-          <label style="font-size:.8rem;font-weight:600;color:var(--gray)">TO Section (target)</label>
-          <select id="promote-to" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:.9rem;outline:none">
-            <option value="">— Select target section —</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" onclick="previewPromotion()">Preview</button>
-      </div>
-      <div id="promote-preview" style="display:none">
-        <div style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">
-          <div id="promote-preview-label" style="font-weight:600;margin-bottom:10px;color:var(--blue)"></div>
-          <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;font-size:.82rem">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:var(--gray)">
-              <input type="checkbox" id="promote-select-all" onchange="togglePromoteAll(this.checked)" style="margin:0" />
-              Select all
-            </label>
-            <span id="promote-selected-count" style="color:var(--gray)">0 selected</span>
+        <!-- Stat cards -->
+        <div class="grid grid-4" style="margin-bottom:20px">
+          <div class="stat">
+            <div class="stat-label">Total Students</div>
+            <div class="stat-value" id="cnt-total">—</div>
+            <div class="stat-foot">Active enrolled</div>
           </div>
-          <div id="promote-preview-list" style="max-height:220px;overflow-y:auto;font-size:.88rem;color:#333"></div>
+          <div class="stat stat-present">
+            <div class="stat-label">Present Today</div>
+            <div class="stat-value" id="cnt-present">—</div>
+            <div class="stat-foot" id="cnt-present-pct">—</div>
+          </div>
+          <div class="stat stat-late">
+            <div class="stat-label">Late Today</div>
+            <div class="stat-value" id="cnt-late">—</div>
+            <div class="stat-foot">Arrived after cutoff</div>
+          </div>
+          <div class="stat stat-absent">
+            <div class="stat-label">Absent Today</div>
+            <div class="stat-value" id="cnt-absent">—</div>
+            <div class="stat-foot">SMS sent to parents</div>
+          </div>
         </div>
-        <button class="btn btn-danger" onclick="confirmPromotion()">Promote Selected</button>
-      </div>
-    </div>
 
+        <!-- Charts -->
+        <div class="grid grid-2" style="margin-bottom:20px">
+          <div class="card">
+            <div class="card-head">
+              <h3>Last 7 Days</h3>
+              <span class="hint">Present vs Absent</span>
+            </div>
+            <div class="card-body">
+              <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <h3>By Section — Today</h3>
+              <span class="hint">Present count</span>
+            </div>
+            <div class="card-body">
+              <div class="chart-wrap"><canvas id="chart-sections"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick actions + Recent -->
+        <div class="grid grid-2-1">
+
+          <!-- Recent activity -->
+          <div class="card">
+            <div class="card-head">
+              <h3>Recent Activity</h3>
+              <span class="hint" id="recent-meta">Today's scans</span>
+            </div>
+            <div class="card-body" id="recent-activity">
+              <div class="empty"><div class="empty-icon">📭</div>No scans yet today.</div>
+            </div>
+          </div>
+
+          <!-- Quick actions -->
+          <div class="card">
+            <div class="card-head"><h3>Quick Actions</h3></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <button class="btn btn-primary" onclick="openRegisterModal()">＋ Register Student</button>
+                <button class="btn btn-outline"  onclick="openCsvImportModal()">⬆ Import from CSV</button>
+                <button class="btn btn-secondary" onclick="triggerAbsentCheck('am')">▶ Run AM Absent Check</button>
+                <button class="btn btn-secondary" onclick="triggerAbsentCheck('pm')">▶ Run PM Absent Check</button>
+              </div>
+              <div id="absent-check-result" style="display:none;font-size:.82rem;padding:10px 12px;border-radius:6px;margin-top:12px"></div>
+              <hr style="margin:14px 0;border:none;border-top:1px solid var(--border)" />
+              <div style="font-size:.78rem;color:var(--text-3);line-height:1.6">
+                <div>AM auto-check: <strong id="sched-am" style="color:var(--text)">—</strong></div>
+                <div>PM auto-check: <strong id="sched-pm" style="color:var(--text)">—</strong></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: ATTENDANCE
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-attendance">
+        <div class="card">
+          <div class="toolbar">
+            <label style="font-size:.82rem;font-weight:600;color:var(--text-2)">Date</label>
+            <input type="date" class="input" id="att-date" onchange="loadAttendance()" />
+            <input type="text" class="input input-search" placeholder="Search student name..." id="att-search" oninput="filterAttendance()" style="flex:1;min-width:200px" />
+            <select class="select" id="att-status-filter" onchange="filterAttendance()">
+              <option value="">All status</option>
+              <option value="present">Present</option>
+              <option value="late">Late</option>
+              <option value="absent">Absent</option>
+              <option value="excused">Excused</option>
+            </select>
+            <button class="btn btn-outline" onclick="exportAttendanceCSV()">⬇ Export CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Grade</th>
+                  <th>Section</th>
+                  <th>AM In</th>
+                  <th>AM Out</th>
+                  <th>PM In</th>
+                  <th>PM Out</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="att-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: STUDENTS
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-students">
+        <div class="card">
+          <div class="toolbar">
+            <input type="text" class="input input-search" id="student-search" placeholder="Search by name, RFID, or parent..." oninput="filterStudents()" style="flex:1;min-width:240px" />
+            <select class="select" id="student-section-filter" onchange="filterStudents()">
+              <option value="">All sections</option>
+            </select>
+            <button class="btn btn-outline" onclick="openCsvImportModal()">⬆ Import CSV</button>
+            <button class="btn btn-primary" onclick="openRegisterModal()">＋ Register</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Name</th>
+                  <th>Grade</th>
+                  <th>Section</th>
+                  <th>Parent</th>
+                  <th>Phone</th>
+                  <th>RFID UID</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="student-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: GRADES & SECTIONS
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-classes">
+        <div class="grid grid-2">
+
+          <!-- Grades -->
+          <div class="card">
+            <div class="card-head">
+              <h3>Grades</h3>
+              <span class="hint" id="grade-count">0</span>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:8px;margin-bottom:14px">
+                <input type="text" class="input" id="new-grade-name" placeholder="e.g. Grade 1" style="flex:1" />
+                <button class="btn btn-success" onclick="addGrade()">＋ Add</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Grade</th><th>Sections</th><th>Students</th><th></th></tr></thead>
+                  <tbody id="grade-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sections -->
+          <div class="card">
+            <div class="card-head">
+              <h3>Sections <span class="hint" id="sections-grade-label"></span></h3>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+                <select class="select" id="section-grade-select" onchange="loadSections(this.value)" style="flex:1;min-width:140px">
+                  <option value="">— Select grade —</option>
+                </select>
+                <input type="text" class="input" id="new-section-name" placeholder="e.g. Sampaguita" style="flex:1;min-width:140px" />
+                <button class="btn btn-success" onclick="addSection()">＋ Add</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Section</th><th>Students</th><th></th></tr></thead>
+                  <tbody id="section-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Promotion tool -->
+        <div class="card" style="margin-top:20px">
+          <div class="card-head">
+            <h3>School Year Promotion</h3>
+            <span class="hint">Move students between sections</span>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:14px">
+              Use this at the start of a new school year to advance students from their current section to the next.
+            </p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+              <div style="flex:1;min-width:180px">
+                <label style="display:block;font-size:.78rem;font-weight:600;color:var(--text-2);margin-bottom:5px">FROM section</label>
+                <select class="select" id="promote-from" onchange="loadPromotePreview()" style="width:100%">
+                  <option value="">— Select source —</option>
+                </select>
+              </div>
+              <div style="padding-bottom:10px;font-size:1.2rem;color:var(--text-3)">→</div>
+              <div style="flex:1;min-width:180px">
+                <label style="display:block;font-size:.78rem;font-weight:600;color:var(--text-2);margin-bottom:5px">TO section</label>
+                <select class="select" id="promote-to" style="width:100%">
+                  <option value="">— Select target —</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="previewPromotion()">Preview</button>
+            </div>
+            <div id="promote-preview" style="display:none;margin-top:16px">
+              <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px">
+                <div id="promote-preview-label" style="font-weight:600;margin-bottom:10px;color:var(--brand);font-size:.9rem"></div>
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;font-size:.82rem">
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:var(--text-2)">
+                    <input type="checkbox" id="promote-select-all" onchange="togglePromoteAll(this.checked)" /> Select all
+                  </label>
+                  <span id="promote-selected-count" style="color:var(--text-3)">0 selected</span>
+                </div>
+                <div id="promote-preview-list" style="max-height:220px;overflow-y:auto;font-size:.85rem"></div>
+              </div>
+              <button class="btn btn-danger" style="margin-top:10px" onclick="confirmPromotion()">Promote Selected</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: REPORTS
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-reports">
+        <div class="card">
+          <div class="card-head">
+            <h3>Monthly Attendance Report</h3>
+            <span class="hint">Download Excel or PDF for any month</span>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:14px">
+              Choose a month and optional filter, then download an Excel or PDF report.
+              Reports include present/late/absent/excused counts and an attendance rate per student.
+            </p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+              <div>
+                <label style="display:block;font-size:.78rem;font-weight:600;color:var(--text-2);margin-bottom:5px">Month</label>
+                <input type="month" class="input" id="rep-month" />
+              </div>
+              <div style="flex:1;min-width:200px">
+                <label style="display:block;font-size:.78rem;font-weight:600;color:var(--text-2);margin-bottom:5px">Filter (optional)</label>
+                <select class="select" id="rep-filter" style="width:100%">
+                  <option value="">All students (school-wide)</option>
+                </select>
+              </div>
+              <button class="btn btn-success" onclick="downloadReport('xlsx')">⬇ Excel (.xlsx)</button>
+              <button class="btn btn-primary" onclick="downloadReport('pdf')">⬇ PDF</button>
+            </div>
+            <div id="rep-status" style="font-size:.82rem;color:var(--text-3)"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: CALENDAR (Holidays)
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-calendar">
+        <div class="grid grid-2">
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Add Custom Holiday</h3>
+              <span class="hint">PH holidays auto-sync on startup</span>
+            </div>
+            <div class="card-body">
+              <div style="background:var(--brand-soft);border:1px solid #c7d7ff;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:.82rem;color:var(--brand);display:flex;align-items:center;gap:10px">
+                <span style="font-size:1.1rem">🇵🇭</span>
+                <div style="flex:1">
+                  <strong>Philippine holidays are pre-filled automatically</strong>
+                  <div style="color:var(--text-2);margin-top:2px">Regular, special, and movable (Easter, Eid) holidays load on server boot for the current year.</div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="syncPhHolidays()" title="Re-sync — useful if proclamations were updated">↻ Resync</button>
+              </div>
+              <input type="hidden" id="sync-year" />
+              <input type="hidden" id="sync-specials" />
+              <div id="sync-result" style="display:none;font-size:.82rem;margin-bottom:10px;padding:10px;border-radius:6px"></div>
+              <p style="font-size:.85rem;color:var(--text-2);margin-bottom:14px">
+                Add your school's own non-school days (foundation day, sportsfest, brownouts):
+              </p>
+              <div class="form-group">
+                <label>Date *</label>
+                <input type="date" class="input" id="hol-date" style="width:100%" />
+              </div>
+              <div class="form-group">
+                <label>Holiday name *</label>
+                <input type="text" class="input" id="hol-name" placeholder="e.g. Foundation Day" style="width:100%" />
+              </div>
+              <div class="form-group">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
+                  <input type="checkbox" id="hol-recurring" />
+                  <span>Recurring (same date every year)</span>
+                </label>
+                <small>Tick for fixed-date school holidays you want repeated yearly.</small>
+              </div>
+              <button class="btn btn-success" onclick="addHoliday()" style="width:100%">＋ Add Custom Holiday</button>
+              <p style="font-size:.78rem;color:var(--text-3);margin-top:12px;line-height:1.5">
+                Weekends are automatically skipped (configured in <code>config.py</code>).
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Configured Holidays</h3>
+              <span class="hint" id="hol-count">0</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Date</th><th>Name</th><th>Recurring</th><th></th></tr></thead>
+                <tbody id="hol-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: SMS & MODEMS
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-sms">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-head">
+            <h3>GSM Modems</h3>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="loadModemStatus()">↻ Refresh</button>
+              <button class="btn btn-primary btn-sm" id="modem-rescan-btn" onclick="rescanModems()" title="Re-scan USB ports for newly-inserted GSM modems">🔄 Rescan</button>
+            </div>
+          </div>
+          <div class="card-body" id="modem-status" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>SMS Activity</h3>
+            <span class="hint">Latest 50 messages</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sent</th>
+                  <th>Student</th>
+                  <th>Phone</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Modem</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody id="sms-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: RFID SCANNER
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-scanner">
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-head">
+              <h3>RFID Scan Test</h3>
+              <span class="hint">Useful for registration</span>
+            </div>
+            <div class="card-body">
+              <input type="text" class="input input-lg" id="rfid-input" placeholder="Tap card or type UID..." style="width:100%" autofocus />
+              <div style="text-align:center;font-size:.8rem;color:var(--text-3);margin-top:8px">
+                Focus this field then tap a card. Result appears below.
+              </div>
+              <div id="result-banner" style="display:none;margin-top:14px;padding:12px 14px;border-radius:8px;font-size:.9rem;font-weight:500"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Hardware Scanner URLs</h3>
+              <span class="hint">For Pi/kiosk</span>
+            </div>
+            <div class="card-body" style="font-size:.85rem;line-height:1.8">
+              <p style="color:var(--text-2);margin-bottom:10px">Use these URLs on the dedicated scanner devices:</p>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <a href="/scanner?id=1&label=Entrance" target="_blank" class="btn btn-outline" style="justify-content:flex-start">
+                  <span>🚪 Entrance Scanner (id=1)</span>
+                </a>
+                <a href="/scanner?id=2&label=Exit" target="_blank" class="btn btn-outline" style="justify-content:flex-start">
+                  <span>🚪 Exit Scanner (id=2)</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: SYSTEM
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-system">
+        <div class="grid grid-2">
+
+          <div class="card">
+            <div class="card-head"><h3>System Info</h3></div>
+            <div class="card-body" id="system-info" style="font-size:.88rem;line-height:1.9">
+              <div>Loading...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Absent SMS Schedule</h3></div>
+            <div class="card-body">
+              <div class="schedule-item">
+                <div>
+                  <div style="font-weight:600">Morning check</div>
+                  <div style="font-size:.78rem;color:var(--text-3)">Marks no-show students and notifies parents</div>
+                </div>
+                <div class="schedule-time" id="sys-sched-am">—</div>
+              </div>
+              <div class="schedule-item">
+                <div>
+                  <div style="font-weight:600">Afternoon check</div>
+                  <div style="font-size:.78rem;color:var(--text-3)">Marks no-show students and notifies parents</div>
+                </div>
+                <div class="schedule-time" id="sys-sched-pm">—</div>
+              </div>
+              <div style="margin-top:14px;display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="triggerAbsentCheck('am')">Run AM now</button>
+                <button class="btn btn-secondary btn-sm" onclick="triggerAbsentCheck('pm')">Run PM now</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <div class="card-head"><h3>Modem Health</h3></div>
+          <div class="card-body" id="system-modem-status" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+        </div>
+      </section>
+
+    </main>
   </div>
+</div>
 
-  <!-- ══════════════════════════════════════════════════════════════════════
-       TAB 4 — SMS LOGS
-  ═══════════════════════════════════════════════════════════════════════════ -->
-  <div id="tab-sms" class="tab-content">
-    <div class="card">
-      <h2>Recent SMS Notifications</h2>
-      <div id="modem-status" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Time</th><th>Student</th><th>Phone</th><th>Type</th><th>Status</th><th>Modem Used</th><th>Message</th></tr></thead>
-          <tbody id="sms-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════════════════════════ -->
 
-</div><!-- /container -->
-
-<!-- ── Register Student Modal ─────────────────────────────────────────────── -->
+<!-- Register Student -->
 <div class="modal-overlay" id="register-modal">
   <div class="modal">
     <h3>Register New Student</h3>
+    <p class="modal-subtitle">Create a new student record and assign an RFID card.</p>
     <div class="form-group">
       <label>Full Name *</label>
-      <input type="text" id="f-name" placeholder="Juan dela Cruz" />
+      <input type="text" class="input" id="f-name" placeholder="Juan dela Cruz" />
     </div>
     <div class="form-group">
       <label>Grade *</label>
-      <select id="f-grade" onchange="onGradeChange(this.value)">
+      <select class="select" id="f-grade" onchange="onGradeChange(this.value)">
         <option value="">— Select grade —</option>
       </select>
     </div>
     <div class="form-group">
       <label>Section *</label>
-      <select id="f-section-select" disabled>
+      <select class="select" id="f-section-select" disabled>
         <option value="">— Select grade first —</option>
       </select>
     </div>
     <div class="form-group">
       <label>Parent / Guardian Name *</label>
-      <input type="text" id="f-parent" placeholder="Maria dela Cruz" />
+      <input type="text" class="input" id="f-parent" placeholder="Maria dela Cruz" />
     </div>
     <div class="form-group">
       <label>Parent Mobile Number *</label>
-      <input type="text" id="f-phone" placeholder="09171234567" maxlength="13" />
+      <input type="text" class="input" id="f-phone" placeholder="09171234567" maxlength="13" />
     </div>
     <div class="form-group">
       <label>RFID Card UID *</label>
-      <input type="text" id="f-rfid" placeholder="Tap card on reader, or type UID manually" />
-      <small style="color:var(--gray);font-size:.78rem">Focus this field then tap the student's RFID card.</small>
+      <input type="text" class="input" id="f-rfid" placeholder="Tap card on reader, or type UID manually" />
+      <small>Focus this field then tap the student's RFID card on the connected reader.</small>
     </div>
     <div class="form-error" id="reg-error"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-success" onclick="registerStudent()">Register</button>
+      <button class="btn btn-success" onclick="registerStudent()">Register Student</button>
     </div>
   </div>
 </div>
 
-<!-- ── Generic Confirm Modal ──────────────────────────────────────────────── -->
-<div class="modal-overlay" id="confirm-modal">
-  <div class="modal" style="max-width:420px">
-    <h3 id="confirm-title" style="color:var(--red)"></h3>
-    <p id="confirm-message" style="font-size:.9rem;color:var(--gray);margin-bottom:24px;line-height:1.6"></p>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
-      <button class="btn btn-danger" onclick="executeConfirm()">Delete</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Delete Student Confirmation Modal ──────────────────────────────────── -->
-<div class="modal-overlay" id="delete-modal">
-  <div class="modal" style="max-width:420px">
-    <h3 style="color:var(--red)">Remove Student</h3>
-    <p style="font-size:.9rem;color:var(--gray);margin-bottom:16px">
-      You are about to remove <strong id="delete-student-name"></strong> from the active list.
-      This will hide them from attendance tracking.
-    </p>
-    <div class="form-group">
-      <label>Type the student's name to confirm</label>
-      <input type="text" id="delete-confirm-input" placeholder="" oninput="checkDeleteInput()" autocomplete="off" />
-    </div>
-    <div class="form-error" id="delete-error"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
-      <button class="btn btn-danger" id="delete-confirm-btn" disabled onclick="executeDeleteStudent()">Remove Student</button>
-    </div>
-  </div>
-</div>
-
-<!-- Hidden file input for photo upload -->
-<input type="file" id="photo-file-input" accept="image/*" style="display:none" onchange="uploadPhotoFile()" />
-
-<!-- ── CSV Import Modal ───────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="csv-import-modal">
-  <div class="modal" style="max-width:780px">
-    <h3>Import Students from CSV</h3>
-
-    <div id="csv-step-pick">
-      <p style="font-size:.88rem;color:var(--gray);margin-bottom:14px;line-height:1.55">
-        Upload a CSV with columns:
-        <code style="background:var(--light);padding:1px 6px;border-radius:4px;font-size:.8rem">rfid_uid, full_name, grade, section, parent_name, parent_phone</code>.
-        Grades and sections must already exist in the system.
-      </p>
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-        <input type="file" id="csv-file-input" accept=".csv,text/csv" style="flex:1;min-width:240px" />
-        <a href="#" onclick="downloadCsvTemplate(event)" style="font-size:.85rem;color:var(--blue);text-decoration:none">⬇ Download template</a>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="closeCsvImportModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
-      </div>
-    </div>
-
-    <div id="csv-step-preview" style="display:none">
-      <div id="csv-preview-summary" style="background:var(--light);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:.88rem"></div>
-      <div style="max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:8px">
-        <table style="width:100%;font-size:.82rem">
-          <thead style="position:sticky;top:0;background:#f1f3f4">
-            <tr>
-              <th style="padding:8px 10px;text-align:left">Row</th>
-              <th style="padding:8px 10px;text-align:left">RFID</th>
-              <th style="padding:8px 10px;text-align:left">Name</th>
-              <th style="padding:8px 10px;text-align:left">Grade · Section</th>
-              <th style="padding:8px 10px;text-align:left">Parent</th>
-              <th style="padding:8px 10px;text-align:left">Phone</th>
-              <th style="padding:8px 10px;text-align:left">Status</th>
-            </tr>
-          </thead>
-          <tbody id="csv-preview-tbody"></tbody>
-        </table>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="resetCsvImport()">Back</button>
-        <button class="btn btn-success" id="csv-commit-btn" onclick="commitCsvImport()">Import Valid Rows</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── Edit Student Modal ───────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="edit-student-modal">
+<!-- Edit Student -->
+<div class="modal-overlay" id="edit-modal">
   <div class="modal">
-    <h3>Edit Student Details</h3>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px">
-      <img id="edit-photo-preview" src="" alt="Student Photo" style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid var(--border);background:var(--light)" />
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
-        <input type="file" id="edit-photo-input" accept="image/*" style="display:none" onchange="onEditPhotoPicked()" />
-        <button class="btn btn-outline" type="button" onclick="document.getElementById('edit-photo-input').click()" style="padding:7px 12px;font-size:.82rem">Change Photo</button>
-        <small id="edit-photo-name" style="color:var(--gray);font-size:.78rem">No file selected</small>
-        <small style="color:var(--gray);font-size:.78rem">Optional: choose a new photo to upload on save.</small>
+    <h3>Edit Student</h3>
+    <p class="modal-subtitle">Update student details, photo, or RFID assignment.</p>
+    <div style="display:flex;gap:14px;margin-bottom:14px;align-items:center">
+      <div id="edit-photo-preview" style="width:64px;height:64px;border-radius:50%;overflow:hidden;background:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--text-3);border:1px solid var(--border)">—</div>
+      <div style="flex:1">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('edit-photo-file').click()">Change Photo</button>
+        <small style="display:block;color:var(--text-3);font-size:.74rem;margin-top:4px">JPG/PNG/WEBP, square works best</small>
+        <input type="file" id="edit-photo-file" accept="image/*" style="display:none" onchange="uploadEditPhoto()" />
       </div>
     </div>
     <div class="form-group">
-      <label>Full Name *</label>
-      <input type="text" id="e-name" />
+      <label>Full Name</label>
+      <input type="text" class="input" id="e-name" />
     </div>
     <div class="form-group">
-      <label>Grade *</label>
-      <select id="e-grade" onchange="onEditGradeChange(this.value)">
-        <option value="">— Select grade —</option>
-      </select>
+      <label>Grade</label>
+      <select class="select" id="e-grade" onchange="onEditGradeChange(this.value)"></select>
     </div>
     <div class="form-group">
-      <label>Section *</label>
-      <select id="e-section-select" disabled>
-        <option value="">— Select grade first —</option>
-      </select>
+      <label>Section</label>
+      <select class="select" id="e-section"></select>
     </div>
     <div class="form-group">
-      <label>Parent / Guardian Name *</label>
-      <input type="text" id="e-parent" />
+      <label>Parent Name</label>
+      <input type="text" class="input" id="e-parent" />
     </div>
     <div class="form-group">
-      <label>Parent Mobile Number *</label>
-      <input type="text" id="e-phone" maxlength="13" />
+      <label>Parent Phone</label>
+      <input type="text" class="input" id="e-phone" />
     </div>
     <div class="form-group">
-      <label>RFID Card UID *</label>
-      <input type="text" id="e-rfid" />
+      <label>RFID UID</label>
+      <input type="text" class="input" id="e-rfid" />
     </div>
     <div class="form-error" id="edit-error"></div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeEditStudentModal()">Cancel</button>
-      <button class="btn btn-success" onclick="saveStudentEdits()">Save Changes</button>
+      <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditStudent()">Save Changes</button>
     </div>
   </div>
 </div>
 
+<!-- Delete confirm (typed name) -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal">
+    <h3 style="color:var(--red)">Remove Student</h3>
+    <p class="modal-subtitle">This deactivates <strong id="delete-student-name"></strong>. The attendance history stays intact but they won't appear on scanners.</p>
+    <p style="font-size:.85rem;color:var(--text-2);margin-bottom:10px">Type the student's name to confirm:</p>
+    <input type="text" class="input" id="delete-confirm-input" oninput="checkDeleteInput()" style="width:100%" />
+    <div class="form-error" id="delete-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" id="delete-confirm-btn" disabled onclick="executeDeleteStudent()">Remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit attendance modal -->
+<div class="modal-overlay" id="att-edit-modal">
+  <div class="modal">
+    <h3>Edit Attendance</h3>
+    <p class="modal-subtitle" id="att-edit-subtitle"></p>
+    <div class="form-group">
+      <label>Status</label>
+      <select class="select" id="att-edit-status">
+        <option value="present">Present</option>
+        <option value="late">Late</option>
+        <option value="absent">Absent</option>
+        <option value="excused">Excused</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea class="input" id="att-edit-notes" rows="3" style="width:100%;resize:vertical"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeAttEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAttEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CSV Import -->
+<div class="modal-overlay" id="csv-modal">
+  <div class="modal modal-xl">
+    <h3>Bulk Import Students from CSV</h3>
+    <p class="modal-subtitle">Upload a CSV with columns: <code>rfid_uid, full_name, grade, section, parent_name, parent_phone</code>. Grades/sections must already exist.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <input type="file" id="csv-file" accept=".csv" class="input" style="flex:1;min-width:200px" />
+      <button class="btn btn-outline" onclick="previewCsvImport()">Validate</button>
+      <button class="btn btn-success" onclick="commitCsvImport()" id="csv-commit-btn" disabled>Import Valid Rows</button>
+    </div>
+    <div id="csv-summary" style="display:none;font-size:.85rem;margin-bottom:10px"></div>
+    <div class="table-wrap" style="max-height:340px;overflow-y:auto">
+      <table id="csv-table" style="font-size:.8rem">
+        <thead><tr><th>#</th><th>RFID</th><th>Name</th><th>Grade</th><th>Section</th><th>Parent</th><th>Phone</th><th>Status</th></tr></thead>
+        <tbody id="csv-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCsvModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic confirm -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h3 id="confirm-title">Confirm</h3>
+    <p class="modal-subtitle" id="confirm-message"></p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="executeConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
 <div id="toast"></div>
 
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// ── Globals ───────────────────────────────────────────────────────────────────
-let allStudents  = [];
-let currentPhotoStudentId = null;
-let currentEditStudentId = null;
-let _editAllSections = [];
-const API = window.location.origin && window.location.origin.startsWith('http')
-  ? window.location.origin
-  : 'http://127.0.0.1:8000';
+"use strict";
 
-// ── Clock ─────────────────────────────────────────────────────────────────────
-function updateClock() {
-  document.getElementById('clock').textContent =
-    new Date().toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})
-    + '  ' + new Date().toLocaleTimeString('en-PH');
+const API = "";   // same origin
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allStudents = [];
+let allGrades   = [];
+let allSections = [];
+let attRecords  = [];
+let smsLogs     = [];
+let chartTrend  = null;
+let chartSections = null;
+
+const PAGE_META = {
+  dashboard:  { title: "Dashboard",        sub: "Today's attendance at a glance" },
+  attendance: { title: "Attendance",       sub: "View and edit attendance records" },
+  students:   { title: "Students",         sub: "Enrolled student directory" },
+  classes:    { title: "Grades & Sections",sub: "Manage classes and promotions" },
+  reports:    { title: "Reports",          sub: "Monthly attendance summaries" },
+  calendar:   { title: "Calendar",         sub: "Holidays and non-school days" },
+  sms:        { title: "SMS & Modems",     sub: "Notification activity and GSM status" },
+  scanner:    { title: "RFID Scanner",     sub: "Test scans and access kiosk URLs" },
+  system:     { title: "System Status",    sub: "Server, schedule, and hardware health" },
+};
+
+// ── Sidebar/page switching ────────────────────────────────────────────────────
+function switchPage(name) {
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.page === name));
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById(`page-${name}`).classList.add("active");
+  const meta = PAGE_META[name] || { title: name, sub: "" };
+  document.getElementById("page-title").textContent = meta.title;
+  document.getElementById("page-subtitle").textContent = meta.sub;
+  document.getElementById("sidebar").classList.remove("open");
+
+  // Load data lazily per page
+  if (name === "dashboard")  loadDashboard();
+  if (name === "attendance") loadAttendance();
+  if (name === "students")   loadStudents();
+  if (name === "classes")    { loadGrades(); populatePromoteSections(); }
+  if (name === "reports")    initReports();
+  if (name === "calendar")   loadHolidays();
+  if (name === "sms")        { loadSmsLogs(); loadModemStatus(); }
+  if (name === "scanner")    setTimeout(() => document.getElementById("rfid-input").focus(), 50);
+  if (name === "system")     loadSystemInfo();
 }
-setInterval(updateClock, 1000); updateClock();
-
-// ── Tab switching ─────────────────────────────────────────────────────────────
-const TAB_NAMES = ['scanner','attendance','students','classes','sms'];
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  const idx = TAB_NAMES.indexOf(name);
-  if (idx >= 0) document.querySelectorAll('.tab')[idx].classList.add('active');
-  document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'scanner')    { loadStats(); loadRecentScans(); }
-  if (name === 'attendance') { initAttDate(); loadAttendance(); }
-  if (name === 'students')   loadStudents();
-  if (name === 'classes')    { loadGrades(); populatePromoteSections(); }
-  if (name === 'sms')        loadSmsLogs();
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("open");
 }
 
-// ── Generic confirm modal ─────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("show"), 3000);
+}
+
+// ── Live event stream (SSE) ───────────────────────────────────────────────────
+// Connects to /events on page load and reacts to scan events in real time so
+// the dashboard updates instantly when a Pi scanner posts a /scan. The browser
+// EventSource auto-reconnects on transient drops; we only manage UI state.
+let _liveEvents = null;
+let _liveReconnectTimer = null;
+
+function _activePageId() {
+  const active = document.querySelector(".page.active");
+  return active ? active.id.replace(/^page-/, "") : null;
+}
+
+function _setLiveIndicator(online) {
+  const pill = document.getElementById("live-indicator");
+  const text = document.getElementById("live-text");
+  if (!pill || !text) return;
+  pill.classList.toggle("offline", !online);
+  text.textContent = online ? "Live" : "Offline";
+}
+
+function _handleScanEvent(data) {
+  // data shape mirrors ScanResponse — {success, student, attendance, action, ...}
+  const s   = data.student   || {};
+  const att = data.attendance || {};
+  const actionMap = {
+    am_in:  "morning in",   am_out: "morning out",
+    pm_in:  "afternoon in", pm_out: "afternoon out",
+  };
+  const actionLabel = actionMap[data.action] || data.action || "scan";
+  const name = s.full_name || "Someone";
+  toast(`${name} — ${actionLabel}`);
+
+  // Refresh only what's currently visible — cheap and avoids surprise reloads.
+  const page = _activePageId();
+  if (page === "dashboard")  loadDashboard();
+  if (page === "attendance") {
+    // Only reload if the attendance page is viewing today's date (the scan's date).
+    const picker = document.getElementById("att-date");
+    if (!picker || !picker.value || picker.value === (att.date || todayISO())) {
+      loadAttendance();
+    }
+  }
+  if (page === "sms")        loadSmsLogs();
+}
+
+function connectLiveEvents() {
+  if (_liveEvents) {
+    try { _liveEvents.close(); } catch (e) {}
+  }
+  _liveEvents = new EventSource(`${API}/events`);
+
+  _liveEvents.onopen = () => {
+    _setLiveIndicator(true);
+    if (_liveReconnectTimer) {
+      clearTimeout(_liveReconnectTimer);
+      _liveReconnectTimer = null;
+    }
+  };
+
+  _liveEvents.addEventListener("scan", (e) => {
+    try { _handleScanEvent(JSON.parse(e.data)); } catch (err) { console.warn(err); }
+  });
+
+  _liveEvents.onerror = () => {
+    _setLiveIndicator(false);
+    // EventSource has its own auto-reconnect, but if it stays broken the
+    // browser may give up. Force a fresh attempt every 5 s as backup.
+    if (!_liveReconnectTimer) {
+      _liveReconnectTimer = setTimeout(() => {
+        _liveReconnectTimer = null;
+        connectLiveEvents();
+      }, 5000);
+    }
+  };
+}
+function chip(val) {
+  const raw = String(val || "").toLowerCase();
+  const map = {
+    pending: "queued", queued: "queued",
+    sent: "sent", failed: "failed",
+    present: "present", late: "late", absent: "absent", excused: "excused",
+  };
+  const cls = map[raw] || raw;
+  return `<span class="chip chip-${cls}">${String(val || "").toUpperCase()}</span>`;
+}
+function avatar(s) {
+  if (s.photo_path) return `<img class="avatar" src="${s.photo_path}" alt="" />`;
+  const initials = (s.full_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+  return `<div class="avatar-placeholder">${initials}</div>`;
+}
+function fmtTime(t) {
+  if (!t) return "—";
+  const [h, m] = t.split(":");
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? "PM" : "AM"}`;
+}
+function fmtDateTime(dt) {
+  if (!dt) return "—";
+  const d = new Date(dt);
+  if (isNaN(d)) return dt;
+  return d.toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+}
+function fmtSched(hhmm) {
+  if (!hhmm) return "—";
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+function todayISO() { return new Date().toISOString().split("T")[0]; }
+function isoDaysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split("T")[0];
+}
+
+// ── Confirm modal ─────────────────────────────────────────────────────────────
 let _confirmCallback = null;
 function showConfirmModal(title, message, onYes) {
   _confirmCallback = onYes;
-  document.getElementById('confirm-title').textContent   = title;
-  document.getElementById('confirm-message').textContent = message;
-  document.getElementById('confirm-modal').classList.add('open');
+  document.getElementById("confirm-title").textContent = title;
+  document.getElementById("confirm-message").textContent = message;
+  document.getElementById("confirm-modal").classList.add("open");
 }
 function closeConfirmModal() {
-  document.getElementById('confirm-modal').classList.remove('open');
+  document.getElementById("confirm-modal").classList.remove("open");
   _confirmCallback = null;
 }
 async function executeConfirm() {
@@ -728,835 +1571,1232 @@ async function executeConfirm() {
   closeConfirmModal();
   if (fn) await fn();
 }
-document.getElementById('confirm-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('confirm-modal')) closeConfirmModal();
-});
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 3000);
-}
-function chip(val) {
-  const raw = String(val || '').toLowerCase();
-  const map = {
-    pending: { cls: 'queued', label: 'QUEUED' },
-    sent: { cls: 'sent', label: 'SENT' },
-    failed: { cls: 'failed', label: 'FAILED' },
-    present: { cls: 'present', label: 'PRESENT' },
-    late: { cls: 'late', label: 'LATE' },
-    absent: { cls: 'absent', label: 'ABSENT' },
-    excused: { cls: 'excused', label: 'EXCUSED' },
-  };
-  const cfg = map[raw] || { cls: raw, label: String(val || '').toUpperCase() };
-  return `<span class="chip chip-${cfg.cls}">${cfg.label}</span>`;
-}
-
-// ── System status ─────────────────────────────────────────────────────────────
+// ── Status / top bar ──────────────────────────────────────────────────────────
 async function initStatus() {
   try {
     const s = await fetch(`${API}/status`).then(r => r.json());
-    document.getElementById('school-title').textContent = s.school + ' — Attendance System';
-    if (s.simulation_mode) document.getElementById('sim-badge').style.display = 'inline';
-    if (s.absent_schedule) {
-      document.getElementById('sched-am').textContent = fmtSched(s.absent_schedule.am);
-      document.getElementById('sched-pm').textContent = fmtSched(s.absent_schedule.pm);
+    const schoolEl = document.getElementById("topbar-school");
+    if (schoolEl) schoolEl.textContent = s.school || "";
+    document.title = `${s.school || "Attendance"} — Admin`;
+    if (s.simulation_mode) {
+      document.getElementById("sim-badge").style.display = "inline-flex";
+      document.getElementById("footer-mode").textContent = "Simulation Mode";
+    } else {
+      document.getElementById("footer-mode").textContent = "Production";
     }
-  } catch(e) {}
+    if (s.absent_schedule) {
+      document.getElementById("sched-am").textContent = fmtSched(s.absent_schedule.am);
+      document.getElementById("sched-pm").textContent = fmtSched(s.absent_schedule.pm);
+      document.getElementById("sys-sched-am").textContent = fmtSched(s.absent_schedule.am);
+      document.getElementById("sys-sched-pm").textContent = fmtSched(s.absent_schedule.pm);
+    }
+  } catch (e) {}
 }
-function fmtSched(hhmm) {
-  const [h, m] = hhmm.split(':').map(Number);
-  return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
+
+function tickClock() {
+  const now = new Date();
+  const date = now.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const time = now.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", hour12: true });
+  document.getElementById("topbar-date").textContent = `${date} · ${time}`;
+  document.getElementById("footer-time").textContent = time;
 }
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  await Promise.all([
+    loadSummary(),
+    loadRecentScans(),
+    loadStudentCount(),
+    loadWeeklyTrend(),
+    loadSectionsToday(),
+    loadScannerHeartbeats(),
+  ]);
+}
+
+async function loadStudentCount() {
+  try {
+    const list = await fetch(`${API}/students?active_only=true`).then(r => r.json());
+    document.getElementById("cnt-total").textContent = list.length;
+    allStudents = list;
+  } catch (e) {}
+}
+
+async function loadSummary() {
+  try {
+    const s = await fetch(`${API}/attendance/summary`).then(r => r.json());
+    document.getElementById("cnt-present").textContent = s.present;
+    document.getElementById("cnt-late").textContent    = s.late;
+    document.getElementById("cnt-absent").textContent  = s.absent;
+    const total = (s.present || 0) + (s.late || 0) + (s.absent || 0) + (s.excused || 0);
+    const pct = total ? Math.round(((s.present + s.late) / total) * 100) : 0;
+    document.getElementById("cnt-present-pct").textContent = total ? `${pct}% of recorded` : "—";
+  } catch (e) {}
+}
+
+async function loadRecentScans() {
+  const today = todayISO();
+  try {
+    const records = await fetch(`${API}/attendance?target_date=${today}`).then(r => r.json());
+    const container = document.getElementById("recent-activity");
+    document.getElementById("recent-meta").textContent = `${records.length} student${records.length !== 1 ? "s" : ""} scanned`;
+    if (!records.length) {
+      container.innerHTML = `<div class="empty"><div class="empty-icon">📭</div>No scans yet today.</div>`;
+      return;
+    }
+    // sort by most recent time across any slot
+    const sorted = records.slice().sort((a, b) => {
+      const ta = a.pm_time_out || a.pm_time_in || a.am_time_out || a.am_time_in || "";
+      const tb = b.pm_time_out || b.pm_time_in || b.am_time_out || b.am_time_in || "";
+      return tb.localeCompare(ta);
+    });
+    container.innerHTML = sorted.slice(0, 8).map(r => {
+      const latest = r.pm_time_out || r.pm_time_in || r.am_time_out || r.am_time_in;
+      const action =
+        r.pm_time_out ? "PM Out" :
+        r.pm_time_in  ? "PM In"  :
+        r.am_time_out ? "AM Out" :
+        r.am_time_in  ? "AM In"  : "—";
+      const photoHtml = avatar({ full_name: r.student_name, photo_path: null });
+      return `
+        <div class="activity-item">
+          ${photoHtml}
+          <div class="activity-body">
+            <div class="name">${r.student_name || "Unknown"}</div>
+            <div class="meta">${r.grade || ""} ${r.section || ""} · ${action} ${chip(r.status)}</div>
+          </div>
+          <div class="activity-time">${fmtTime(latest)}</div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    document.getElementById("recent-activity").innerHTML = `<div class="empty">Couldn't load activity.</div>`;
+  }
+}
+
+async function loadWeeklyTrend() {
+  if (typeof Chart === "undefined") return;
+  const labels = [];
+  const present = [];
+  const absent  = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = isoDaysAgo(i);
+    try {
+      const s = await fetch(`${API}/attendance/summary?target_date=${d}`).then(r => r.json());
+      const label = new Date(d).toLocaleDateString("en-PH", { weekday: "short" });
+      labels.push(label);
+      present.push((s.present || 0) + (s.late || 0));
+      absent.push(s.absent || 0);
+    } catch (e) {
+      labels.push(d.slice(5));
+      present.push(0);
+      absent.push(0);
+    }
+  }
+  const ctx = document.getElementById("chart-trend");
+  if (!ctx) return;
+  if (chartTrend) chartTrend.destroy();
+  chartTrend = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "Present + Late", data: present, borderColor: "#16a34a", backgroundColor: "rgba(22,163,74,.12)", tension: .3, fill: true, pointRadius: 4 },
+        { label: "Absent",         data: absent,  borderColor: "#dc2626", backgroundColor: "rgba(220,38,38,.08)", tension: .3, fill: true, pointRadius: 4 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { font: { size: 11 } } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+async function loadSectionsToday() {
+  if (typeof Chart === "undefined") return;
+  const today = todayISO();
+  try {
+    const records = await fetch(`${API}/attendance?target_date=${today}`).then(r => r.json());
+    const bySection = {};
+    records.forEach(r => {
+      if (r.status === "absent") return;
+      const key = `${r.grade || "?"} ${r.section || "?"}`.trim();
+      bySection[key] = (bySection[key] || 0) + 1;
+    });
+    const labels = Object.keys(bySection);
+    const data   = Object.values(bySection);
+    const ctx = document.getElementById("chart-sections");
+    if (!ctx) return;
+    if (chartSections) chartSections.destroy();
+    if (!labels.length) {
+      ctx.parentElement.innerHTML = `<div class="chart-empty">No section data for today yet.</div>`;
+      return;
+    }
+    chartSections = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ label: "Present", data, backgroundColor: "#2563eb", borderRadius: 6 }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: labels.length > 5 ? "y" : "x",
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } },
+          x: { grid: { display: false } },
+        },
+      },
+    });
+  } catch (e) {}
+}
+
 async function triggerAbsentCheck(session) {
-  const box = document.getElementById('absent-check-result');
-  box.style.display = 'block';
-  box.style.background = '#e8f0fe';
-  box.style.color = '#1a73e8';
+  const box = document.getElementById("absent-check-result");
+  box.style.display = "block";
+  box.style.background = "var(--brand-soft)";
+  box.style.color = "var(--brand)";
   box.textContent = `Running ${session.toUpperCase()} absent check...`;
   try {
-    const r    = await fetch(`${API}/attendance/check-absent?session=${session}`, {method:'POST'});
+    const r = await fetch(`${API}/attendance/check-absent?session=${session}`, { method: "POST" });
     const data = await r.json();
     if (r.ok) {
       if (data.notified === 0) {
-        box.style.background = '#e6f4ea'; box.style.color = '#1e8c45';
-        box.textContent = `✓ ${session.toUpperCase()} check complete — no new absences found.`;
+        box.style.background = "var(--green-soft)";
+        box.style.color = "var(--green)";
+        box.textContent = `✓ ${session.toUpperCase()} check complete — no new absences.`;
       } else {
-        box.style.background = '#fce8e6'; box.style.color = '#d93025';
-        box.textContent = `⚠ ${data.notified} student(s) marked absent & SMS sent: ${data.names.join(', ')}`;
-        loadStats();
+        box.style.background = "var(--red-soft)";
+        box.style.color = "var(--red)";
+        box.textContent = `⚠ ${data.notified} student(s) marked absent, SMS sent: ${data.names.join(", ")}`;
+        loadSummary();
       }
     } else {
-      box.style.background = '#fce8e6'; box.style.color = '#d93025';
-      box.textContent = `Error: ${data.detail || 'Unknown error'}`;
+      box.style.background = "var(--red-soft)";
+      box.style.color = "var(--red)";
+      box.textContent = `Error: ${data.detail || "Unknown error"}`;
     }
-  } catch(e) {
-    box.style.background = '#fce8e6'; box.style.color = '#d93025';
-    box.textContent = `Cannot reach server.`;
+  } catch (e) {
+    box.style.background = "var(--red-soft)";
+    box.style.color = "var(--red)";
+    box.textContent = "Cannot reach server.";
   }
 }
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
-async function loadStats() {
-  try {
-    const s = await fetch(`${API}/attendance/summary`).then(r => r.json());
-    document.getElementById('cnt-present').textContent = s.present;
-    document.getElementById('cnt-late').textContent    = s.late;
-    document.getElementById('cnt-absent').textContent  = s.absent;
-  } catch(e) {}
-}
-
-// ── Recent scans ──────────────────────────────────────────────────────────────
-async function loadRecentScans() {
-  const today = new Date().toISOString().split('T')[0];
-  try {
-    const records = await fetch(`${API}/attendance?target_date=${today}`).then(r => r.json());
-    const tbody = document.getElementById('recent-tbody');
-    tbody.innerHTML = records.slice(0,20).map(rec => `
-      <tr>
-        <td>${rec.student_name}</td>
-        <td>${rec.grade || ''}-${rec.section || ''}</td>
-        <td>${rec.am_time_in  || '-'}</td>
-        <td>${rec.am_time_out || '-'}</td>
-        <td>${rec.pm_time_in  || '-'}</td>
-        <td>${rec.pm_time_out || '-'}</td>
-        <td>${chip(rec.status)}</td>
-      </tr>`).join('');
-    if (!records.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:24px">No scans yet today.</td></tr>';
-  } catch(e) {}
-}
-
-
-// ── Attendance tab ────────────────────────────────────────────────────────────
-function initAttDate() {
-  const el = document.getElementById('att-date');
-  if (!el.value) el.value = new Date().toISOString().split('T')[0];
-}
-let _attRecords = [];
+// ── ATTENDANCE ────────────────────────────────────────────────────────────────
 async function loadAttendance() {
-  initAttDate();
-  const d = document.getElementById('att-date').value;
-  document.getElementById('att-search').value = '';
+  const el = document.getElementById("att-date");
+  if (!el.value) el.value = todayISO();
+  const d = el.value;
   try {
-    _attRecords = await fetch(`${API}/attendance?target_date=${d}`).then(r => r.json());
-    renderAttendance(_attRecords);
-  } catch(e) {
-    document.getElementById('att-tbody').innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--red);padding:24px">Error loading attendance: ${e.message}</td></tr>`;
+    attRecords = await fetch(`${API}/attendance?target_date=${d}`).then(r => r.json());
+    filterAttendance();
+  } catch (e) {
+    document.getElementById("att-tbody").innerHTML =
+      `<tr><td colspan="10" class="empty">Error loading attendance.</td></tr>`;
   }
 }
 function filterAttendance() {
-  const q = document.getElementById('att-search').value.toLowerCase();
-  renderAttendance(q ? _attRecords.filter(r => (r.student_name||'').toLowerCase().includes(q)) : _attRecords);
+  const q = document.getElementById("att-search").value.toLowerCase();
+  const st = document.getElementById("att-status-filter").value;
+  let rows = attRecords;
+  if (q)  rows = rows.filter(r => (r.student_name || "").toLowerCase().includes(q));
+  if (st) rows = rows.filter(r => r.status === st);
+  renderAttendance(rows);
 }
 function renderAttendance(records) {
-  const d = document.getElementById('att-date').value;
-  const tbody = document.getElementById('att-tbody');
-  tbody.innerHTML = records.map(rec => `
+  const tbody = document.getElementById("att-tbody");
+  if (!records.length) {
+    tbody.innerHTML = `<tr><td colspan="10" class="empty"><div class="empty-icon">📅</div>No attendance records for this date.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = records.map(r => `
     <tr>
-      <td>${rec.student_name}</td>
-      <td>${rec.grade || ''}</td><td>${rec.section || ''}</td>
-      <td>${fmtTime(rec.am_time_in)}</td>
-      <td>${fmtTime(rec.am_time_out)}</td>
-      <td>${fmtTime(rec.pm_time_in)}</td>
-      <td>${fmtTime(rec.pm_time_out)}</td>
-      <td>${chip(rec.status)}</td>
-      <td>${rec.notes || ''}</td>
+      <td><strong>${r.student_name || ""}</strong></td>
+      <td>${r.grade || ""}</td>
+      <td>${r.section || ""}</td>
+      <td>${fmtTime(r.am_time_in)}</td>
+      <td>${fmtTime(r.am_time_out)}</td>
+      <td>${fmtTime(r.pm_time_in)}</td>
+      <td>${fmtTime(r.pm_time_out)}</td>
+      <td>${chip(r.status)}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.notes || ""}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-secondary" style="font-size:.75rem;padding:4px 8px"
-          onclick="markExcused(${rec.id})">Excused</button>
-        <button class="btn btn-danger" style="font-size:.75rem;padding:4px 8px;margin-left:4px"
-          onclick="deleteAttendance(${rec.id},'${(rec.student_name||'').replace(/'/g,"\\'")}')">Delete</button>
+        <button class="btn btn-secondary btn-sm" onclick="openAttEditModal(${r.id})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteAttendance(${r.id},'${(r.student_name||'').replace(/'/g,"\\'")}')">Del</button>
       </td>
-    </tr>`).join('');
-  if (!records.length) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#999;padding:24px">No attendance records for ${d}.</td></tr>`;
+    </tr>`).join("");
 }
-async function markExcused(id) {
-  await fetch(`${API}/attendance/${id}?status=excused`,{method:'PATCH'});
-  loadAttendance(); toast('Marked as excused');
+let _attEditId = null;
+function openAttEditModal(id) {
+  const rec = attRecords.find(r => r.id === id);
+  if (!rec) return;
+  _attEditId = id;
+  document.getElementById("att-edit-subtitle").textContent = `${rec.student_name} · ${rec.date}`;
+  document.getElementById("att-edit-status").value = rec.status;
+  document.getElementById("att-edit-notes").value = rec.notes || "";
+  document.getElementById("att-edit-modal").classList.add("open");
+}
+function closeAttEditModal() {
+  document.getElementById("att-edit-modal").classList.remove("open");
+  _attEditId = null;
+}
+async function saveAttEdit() {
+  if (!_attEditId) return;
+  const status = document.getElementById("att-edit-status").value;
+  const notes  = document.getElementById("att-edit-notes").value;
+  const params = new URLSearchParams({ status, notes });
+  const r = await fetch(`${API}/attendance/${_attEditId}?${params}`, { method: "PATCH" });
+  if (r.ok) {
+    toast("Attendance updated");
+    closeAttEditModal();
+    loadAttendance();
+  } else {
+    toast("Could not save changes");
+  }
 }
 function deleteAttendance(id, name) {
   showConfirmModal(
-    'Delete Attendance Record',
-    `Delete the attendance record for ${name}? This cannot be undone.`,
+    "Delete attendance record",
+    `Delete the record for ${name}? This cannot be undone.`,
     async () => {
-      const r = await fetch(`${API}/attendance/${id}`, {method:'DELETE'});
+      const r = await fetch(`${API}/attendance/${id}`, { method: "DELETE" });
       if (r.ok) { toast(`Record for ${name} deleted`); loadAttendance(); }
-      else { const e = await r.json(); toast(e.detail || 'Error deleting record'); }
+      else     { toast("Could not delete"); }
     }
   );
 }
-function fmtTime(t) {
-  if (!t) return '-';
-  const [h, m] = t.split(':');
-  const hour = parseInt(h);
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
-}
-function exportCSV() {
-  const rows = [['Name','Grade','Section','AM In','AM Out','PM In','PM Out','Status','Notes']];
-  document.querySelectorAll('#att-tbody tr').forEach(tr => {
-    const cells = [...tr.querySelectorAll('td')];
-    if (cells.length >= 9) rows.push(cells.slice(0,9).map(c => `"${c.textContent.trim()}"`));
+function exportAttendanceCSV() {
+  const rows = [["Name","Grade","Section","AM In","AM Out","PM In","PM Out","Status","Notes"]];
+  document.querySelectorAll("#att-tbody tr").forEach(tr => {
+    const cells = [...tr.querySelectorAll("td")];
+    if (cells.length >= 9) rows.push(cells.slice(0, 9).map(c => `"${c.textContent.trim().replace(/"/g,'""')}"`));
   });
-  const a = Object.assign(document.createElement('a'),{
-    href: 'data:text/csv;charset=utf-8,' + encodeURIComponent(rows.map(r=>r.join(',')).join('\n')),
-    download: `attendance_${document.getElementById('att-date').value}.csv`
+  const csv = rows.map(r => r.join(",")).join("\n");
+  const a = Object.assign(document.createElement("a"), {
+    href: "data:text/csv;charset=utf-8," + encodeURIComponent(csv),
+    download: `attendance_${document.getElementById("att-date").value}.csv`,
   });
   a.click();
 }
 
-// ── Students tab ──────────────────────────────────────────────────────────────
+// ── STUDENTS ──────────────────────────────────────────────────────────────────
 async function loadStudents() {
   try {
     allStudents = await fetch(`${API}/students?active_only=true`).then(r => r.json());
-    renderStudents(allStudents);
-  } catch(e) {}
+    populateStudentSectionFilter();
+    filterStudents();
+  } catch (e) {}
 }
-function renderStudents(list) {
-  const tbody = document.getElementById('student-tbody');
-  tbody.innerHTML = list.map(s => {
-    const photoHtml = s.photo_path
-      ? `<img src="${s.photo_path}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--border)" />`
-      : `<div style="width:36px;height:36px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700">${s.full_name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}</div>`;
-    return `
-    <tr onclick="openEditStudentModal(${s.id})" style="cursor:pointer">
-      <td>${photoHtml}</td>
-      <td>${s.full_name}</td>
-      <td>${s.grade || '-'}</td>
-      <td>${s.section || '-'}</td>
-      <td>${s.parent_name}</td>
-      <td>${s.parent_phone}</td>
-      <td><code style="font-size:.78rem">${s.rfid_uid}</code></td>
-      <td style="white-space:nowrap">
-        <span style="display:inline-flex;gap:4px">
-          <button class="btn btn-danger" style="font-size:.72rem;padding:4px 8px"
-            onclick="event.stopPropagation(); deactivateStudent(${s.id},'${s.full_name.replace(/'/g,"\\'")}')">Remove</button>
-        </span>
-      </td>
-    </tr>`;
-  }).join('');
-  if (!list.length) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:24px">No students registered yet.</td></tr>';
+function populateStudentSectionFilter() {
+  const sel = document.getElementById("student-section-filter");
+  if (!sel) return;
+  const sections = new Map();
+  allStudents.forEach(s => {
+    if (s.section_id) sections.set(s.section_id, `${s.grade || ""} ${s.section || ""}`.trim());
+  });
+  sel.innerHTML = `<option value="">All sections</option>` +
+    [...sections.entries()].map(([id, name]) => `<option value="${id}">${name}</option>`).join("");
 }
 function filterStudents() {
-  const q = document.getElementById('student-search').value.toLowerCase();
-  renderStudents(allStudents.filter(s => s.full_name.toLowerCase().includes(q)));
+  const q = document.getElementById("student-search").value.toLowerCase();
+  const sid = document.getElementById("student-section-filter").value;
+  let rows = allStudents;
+  if (q)   rows = rows.filter(s =>
+    (s.full_name || "").toLowerCase().includes(q) ||
+    (s.rfid_uid  || "").toLowerCase().includes(q) ||
+    (s.parent_name || "").toLowerCase().includes(q)
+  );
+  if (sid) rows = rows.filter(s => String(s.section_id) === sid);
+  renderStudents(rows);
 }
+function renderStudents(list) {
+  const tbody = document.getElementById("student-tbody");
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty"><div class="empty-icon">👥</div>No students found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(s => `
+    <tr class="clickable-row" onclick="openEditStudentModal(${s.id})">
+      <td>${avatar(s)}</td>
+      <td><strong>${s.full_name}</strong></td>
+      <td>${s.grade || "—"}</td>
+      <td>${s.section || "—"}</td>
+      <td>${s.parent_name}</td>
+      <td>${s.parent_phone}</td>
+      <td><code>${s.rfid_uid}</code></td>
+      <td style="white-space:nowrap" onclick="event.stopPropagation()">
+        <button class="btn btn-secondary btn-sm" onclick="openEditStudentModal(${s.id})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deactivateStudent(${s.id},'${s.full_name.replace(/'/g,"\\'")}')">Remove</button>
+      </td>
+    </tr>`).join("");
+}
+
+// Register modal
+async function openRegisterModal() {
+  await ensureGradesLoaded();
+  const sel = document.getElementById("f-grade");
+  sel.innerHTML = `<option value="">— Select grade —</option>` +
+    allGrades.map(g => `<option value="${g.id}">${g.name}</option>`).join("");
+  document.getElementById("f-section-select").innerHTML = `<option value="">— Select grade first —</option>`;
+  document.getElementById("f-section-select").disabled = true;
+  ["f-name", "f-parent", "f-phone", "f-rfid"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("reg-error").classList.remove("show");
+  document.getElementById("register-modal").classList.add("open");
+  setTimeout(() => document.getElementById("f-name").focus(), 50);
+}
+function closeModal() { document.getElementById("register-modal").classList.remove("open"); }
+async function onGradeChange(gradeId) {
+  const sel = document.getElementById("f-section-select");
+  if (!gradeId) { sel.innerHTML = `<option value="">— Select grade first —</option>`; sel.disabled = true; return; }
+  try {
+    const sections = await fetch(`${API}/sections?grade_id=${gradeId}`).then(r => r.json());
+    sel.innerHTML = `<option value="">— Select section —</option>` +
+      sections.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+    sel.disabled = false;
+  } catch (e) {}
+}
+async function registerStudent() {
+  const err = document.getElementById("reg-error");
+  err.classList.remove("show");
+  const payload = {
+    full_name:    document.getElementById("f-name").value.trim(),
+    section_id:   parseInt(document.getElementById("f-section-select").value, 10),
+    parent_name:  document.getElementById("f-parent").value.trim(),
+    parent_phone: document.getElementById("f-phone").value.trim(),
+    rfid_uid:     document.getElementById("f-rfid").value.trim().toUpperCase(),
+  };
+  if (!payload.full_name || !payload.section_id || !payload.parent_name || !payload.parent_phone || !payload.rfid_uid) {
+    err.textContent = "All fields are required.";
+    err.classList.add("show");
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/students`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      toast(`${data.full_name} registered`);
+      closeModal();
+      loadStudents();
+    } else {
+      err.textContent = data.detail || "Could not register.";
+      err.classList.add("show");
+    }
+  } catch (e) {
+    err.textContent = "Could not reach server.";
+    err.classList.add("show");
+  }
+}
+
+// Edit student modal
+let _editStudentId = null;
+async function openEditStudentModal(id) {
+  const s = allStudents.find(x => x.id === id);
+  if (!s) return;
+  _editStudentId = id;
+  await ensureGradesLoaded();
+  document.getElementById("e-name").value   = s.full_name;
+  document.getElementById("e-parent").value = s.parent_name;
+  document.getElementById("e-phone").value  = s.parent_phone;
+  document.getElementById("e-rfid").value   = s.rfid_uid;
+
+  const gradeSel = document.getElementById("e-grade");
+  gradeSel.innerHTML = `<option value="">—</option>` +
+    allGrades.map(g => `<option value="${g.id}" ${g.name === s.grade ? "selected" : ""}>${g.name}</option>`).join("");
+
+  const sectionSel = document.getElementById("e-section");
+  if (s.section_id) {
+    const grade = allGrades.find(g => g.name === s.grade);
+    if (grade) {
+      const sections = await fetch(`${API}/sections?grade_id=${grade.id}`).then(r => r.json());
+      sectionSel.innerHTML = sections.map(x => `<option value="${x.id}" ${x.id === s.section_id ? "selected" : ""}>${x.name}</option>`).join("");
+    }
+  } else {
+    sectionSel.innerHTML = `<option value="">— Select grade —</option>`;
+  }
+
+  const photoEl = document.getElementById("edit-photo-preview");
+  if (s.photo_path) {
+    photoEl.innerHTML = `<img src="${s.photo_path}" style="width:100%;height:100%;object-fit:cover" />`;
+  } else {
+    photoEl.innerHTML = (s.full_name || "?").split(" ").map(n => n[0]).join("").slice(0,2).toUpperCase();
+  }
+  document.getElementById("edit-error").classList.remove("show");
+  document.getElementById("edit-modal").classList.add("open");
+}
+function closeEditModal() {
+  document.getElementById("edit-modal").classList.remove("open");
+  _editStudentId = null;
+}
+async function onEditGradeChange(gradeId) {
+  const sel = document.getElementById("e-section");
+  if (!gradeId) { sel.innerHTML = `<option value="">—</option>`; return; }
+  const sections = await fetch(`${API}/sections?grade_id=${gradeId}`).then(r => r.json());
+  sel.innerHTML = sections.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+}
+async function saveEditStudent() {
+  if (!_editStudentId) return;
+  const err = document.getElementById("edit-error");
+  err.classList.remove("show");
+  const payload = {
+    full_name:    document.getElementById("e-name").value.trim() || null,
+    parent_name:  document.getElementById("e-parent").value.trim() || null,
+    parent_phone: document.getElementById("e-phone").value.trim() || null,
+    rfid_uid:     document.getElementById("e-rfid").value.trim().toUpperCase() || null,
+    section_id:   parseInt(document.getElementById("e-section").value, 10) || null,
+  };
+  try {
+    const r = await fetch(`${API}/students/${_editStudentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      toast("Student updated");
+      closeEditModal();
+      loadStudents();
+    } else {
+      err.textContent = data.detail || "Could not update.";
+      err.classList.add("show");
+    }
+  } catch (e) {
+    err.textContent = "Could not reach server.";
+    err.classList.add("show");
+  }
+}
+async function uploadEditPhoto() {
+  if (!_editStudentId) return;
+  const file = document.getElementById("edit-photo-file").files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const r = await fetch(`${API}/students/${_editStudentId}/photo`, { method: "POST", body: fd });
+    const data = await r.json();
+    if (r.ok) {
+      toast("Photo updated");
+      document.getElementById("edit-photo-preview").innerHTML =
+        `<img src="${data.photo_path}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover" />`;
+      loadStudents();
+    } else {
+      toast(data.detail || "Could not upload photo");
+    }
+  } catch (e) {
+    toast("Upload failed");
+  }
+}
+
+// Remove (deactivate) student with typed-name confirm
 let _deleteStudentId = null;
 let _deleteStudentName = null;
-
 function deactivateStudent(id, name) {
-  _deleteStudentId   = id;
+  _deleteStudentId = id;
   _deleteStudentName = name;
-  document.getElementById('delete-student-name').textContent = name;
-  document.getElementById('delete-confirm-input').value = '';
-  document.getElementById('delete-confirm-input').placeholder = name;
-  document.getElementById('delete-confirm-btn').disabled = true;
-  document.getElementById('delete-error').style.display = 'none';
-  document.getElementById('delete-modal').classList.add('open');
-  setTimeout(() => document.getElementById('delete-confirm-input').focus(), 100);
+  document.getElementById("delete-student-name").textContent = name;
+  document.getElementById("delete-confirm-input").value = "";
+  document.getElementById("delete-confirm-input").placeholder = name;
+  document.getElementById("delete-confirm-btn").disabled = true;
+  document.getElementById("delete-error").classList.remove("show");
+  document.getElementById("delete-modal").classList.add("open");
+  setTimeout(() => document.getElementById("delete-confirm-input").focus(), 80);
 }
 function checkDeleteInput() {
-  const val = document.getElementById('delete-confirm-input').value.trim();
-  document.getElementById('delete-confirm-btn').disabled =
-    val.toLowerCase() !== _deleteStudentName.toLowerCase();
+  const v = document.getElementById("delete-confirm-input").value.trim();
+  document.getElementById("delete-confirm-btn").disabled = v.toLowerCase() !== _deleteStudentName.toLowerCase();
 }
 function closeDeleteModal() {
-  document.getElementById('delete-modal').classList.remove('open');
-  _deleteStudentId = null;
-  _deleteStudentName = null;
+  document.getElementById("delete-modal").classList.remove("open");
+  _deleteStudentId = null; _deleteStudentName = null;
 }
 async function executeDeleteStudent() {
   if (!_deleteStudentId) return;
   try {
-    const r = await fetch(`${API}/students/${_deleteStudentId}`, {method:'DELETE'});
+    const r = await fetch(`${API}/students/${_deleteStudentId}`, { method: "DELETE" });
     if (r.ok) {
-      closeDeleteModal();
       toast(`${_deleteStudentName} removed`);
+      closeDeleteModal();
       loadStudents();
     } else {
       const e = await r.json();
-      const err = document.getElementById('delete-error');
-      err.textContent = e.detail || 'Error removing student';
-      err.style.display = 'block';
+      const err = document.getElementById("delete-error");
+      err.textContent = e.detail || "Could not remove";
+      err.classList.add("show");
     }
-  } catch(e) {
-    const err = document.getElementById('delete-error');
-    err.textContent = 'Could not reach server';
-    err.style.display = 'block';
-  }
-}
-
-// ── Photo upload ───────────────────────────────────────────────────────────────
-function triggerPhotoUpload(studentId) {
-  currentPhotoStudentId = studentId;
-  document.getElementById('photo-file-input').click();
-}
-async function uploadPhotoFile() {
-  const fileInput = document.getElementById('photo-file-input');
-  if (!fileInput.files.length || !currentPhotoStudentId) return;
-  const fd = new FormData();
-  fd.append('file', fileInput.files[0]);
-  try {
-    const r = await fetch(`${API}/students/${currentPhotoStudentId}/photo`,{method:'POST',body:fd});
-    if (r.ok) { toast('Photo uploaded!'); loadStudents(); }
-    else { const e = await r.json(); toast('Upload failed: ' + (e.detail || 'unknown')); }
-  } catch(e) { toast('Upload error'); }
-  fileInput.value = '';
-}
-
-function closeEditStudentModal() {
-  document.getElementById('edit-student-modal').classList.remove('open');
-  document.getElementById('edit-photo-input').value = '';
-  document.getElementById('edit-photo-name').textContent = 'No file selected';
-  document.getElementById('edit-error').style.display = 'none';
-  currentEditStudentId = null;
-}
-
-function onEditPhotoPicked() {
-  const f = document.getElementById('edit-photo-input').files[0];
-  document.getElementById('edit-photo-name').textContent = f ? f.name : 'No file selected';
-}
-
-function _setEditSectionsForGrade(gradeId, selectedSectionId = null) {
-  const secSelect = document.getElementById('e-section-select');
-  const sections = _editAllSections.filter(s => String(s.grade_id) === String(gradeId));
-  secSelect.innerHTML = '<option value="">— Select section —</option>';
-  sections.forEach(s => {
-    secSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
-  });
-  secSelect.disabled = sections.length === 0;
-  if (selectedSectionId) secSelect.value = String(selectedSectionId);
-}
-
-function onEditGradeChange(gradeId) {
-  if (!gradeId) {
-    const secSelect = document.getElementById('e-section-select');
-    secSelect.innerHTML = '<option value="">— Select grade first —</option>';
-    secSelect.disabled = true;
-    return;
-  }
-  _setEditSectionsForGrade(gradeId);
-}
-
-async function openEditStudentModal(studentId) {
-  const s = allStudents.find(x => x.id === studentId);
-  if (!s) return;
-  currentEditStudentId = studentId;
-  document.getElementById('edit-error').style.display = 'none';
-
-  const grades = await fetch(`${API}/grades`).then(r => r.json());
-  _editAllSections = await fetch(`${API}/sections`).then(r => r.json());
-
-  const gradeSelect = document.getElementById('e-grade');
-  gradeSelect.innerHTML = '<option value="">— Select grade —</option>';
-  grades.forEach(g => {
-    gradeSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
-  });
-
-  const secObj = _editAllSections.find(sec => String(sec.id) === String(s.section_id));
-  const gradeId = secObj ? secObj.grade_id : '';
-  if (gradeId) {
-    gradeSelect.value = String(gradeId);
-    _setEditSectionsForGrade(gradeId, s.section_id);
-  } else {
-    document.getElementById('e-section-select').innerHTML = '<option value="">— Select section —</option>';
-    document.getElementById('e-section-select').disabled = false;
-  }
-
-  document.getElementById('e-name').value = s.full_name || '';
-  document.getElementById('e-parent').value = s.parent_name || '';
-  document.getElementById('e-phone').value = s.parent_phone || '';
-  document.getElementById('e-rfid').value = s.rfid_uid || '';
-  document.getElementById('edit-photo-preview').src = s.photo_path || '/static/logo.png';
-  document.getElementById('edit-photo-input').value = '';
-  document.getElementById('edit-photo-name').textContent = 'No file selected';
-
-  document.getElementById('edit-student-modal').classList.add('open');
-}
-
-async function saveStudentEdits() {
-  if (!currentEditStudentId) return;
-  const name      = document.getElementById('e-name').value.trim();
-  const sectionId = document.getElementById('e-section-select').value;
-  const parent    = document.getElementById('e-parent').value.trim();
-  const phone     = document.getElementById('e-phone').value.trim();
-  const rfid      = document.getElementById('e-rfid').value.trim().toUpperCase();
-  const err = document.getElementById('edit-error');
-  err.style.display = 'none';
-
-  if (!name || !sectionId || !parent || !phone || !rfid) {
-    err.textContent = 'All fields are required.';
-    err.style.display = 'block';
-    return;
-  }
-
-  try {
-    const r = await fetch(`${API}/students/${currentEditStudentId}`, {
-      method: 'PATCH',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        full_name: name,
-        section_id: parseInt(sectionId, 10),
-        parent_name: parent,
-        parent_phone: phone,
-        rfid_uid: rfid
-      }),
-    });
-
-    if (!r.ok) {
-      const e = await r.json();
-      err.textContent = e.detail || 'Update failed';
-      err.style.display = 'block';
-      return;
-    }
-
-    const photoFile = document.getElementById('edit-photo-input').files[0];
-    if (photoFile) {
-      const fd = new FormData();
-      fd.append('file', photoFile);
-      const pr = await fetch(`${API}/students/${currentEditStudentId}/photo`, {method:'POST', body:fd});
-      if (!pr.ok) {
-        const pe = await pr.json();
-        err.textContent = pe.detail || 'Photo upload failed';
-        err.style.display = 'block';
-        return;
-      }
-    }
-
-    closeEditStudentModal();
-    toast('Student updated');
-    loadStudents();
   } catch (e) {
-    err.textContent = 'Could not reach server';
-    err.style.display = 'block';
+    document.getElementById("delete-error").classList.add("show");
+    document.getElementById("delete-error").textContent = "Server unreachable.";
   }
-}
-
-document.getElementById('edit-student-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('edit-student-modal')) closeEditStudentModal();
-});
-
-// ── Register modal ────────────────────────────────────────────────────────────
-async function openRegisterModal() {
-  ['f-name','f-parent','f-phone','f-rfid'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('reg-error').style.display = 'none';
-  // Populate grade dropdown from API
-  const gradeSelect = document.getElementById('f-grade');
-  gradeSelect.innerHTML = '<option value="">— Select grade —</option>';
-  try {
-    const grades = await fetch(`${API}/grades`).then(r => r.json());
-    grades.forEach(g => {
-      gradeSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
-    });
-  } catch(e) {}
-  // Reset section dropdown
-  const secSelect = document.getElementById('f-section-select');
-  secSelect.innerHTML = '<option value="">— Select grade first —</option>';
-  secSelect.disabled = true;
-  document.getElementById('register-modal').classList.add('open');
-  setTimeout(() => document.getElementById('f-name').focus(), 100);
-}
-async function onGradeChange(gradeId) {
-  const secSelect = document.getElementById('f-section-select');
-  if (!gradeId) { secSelect.innerHTML = '<option value="">— Select grade first —</option>'; secSelect.disabled = true; return; }
-  secSelect.innerHTML = '<option value="">Loading...</option>';
-  try {
-    const sections = await fetch(`${API}/sections?grade_id=${gradeId}`).then(r => r.json());
-    secSelect.innerHTML = '<option value="">— Select section —</option>';
-    sections.forEach(s => { secSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`; });
-    secSelect.disabled = false;
-  } catch(e) { secSelect.innerHTML = '<option value="">Error loading sections</option>'; }
-}
-function closeModal() {
-  document.getElementById('register-modal').classList.remove('open');
-}
-document.getElementById('register-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('register-modal')) closeModal();
-});
-document.getElementById('delete-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('delete-modal')) closeDeleteModal();
-});
-async function registerStudent() {
-  const name      = document.getElementById('f-name').value.trim();
-  const sectionId = document.getElementById('f-section-select').value;
-  const parent    = document.getElementById('f-parent').value.trim();
-  const phone     = document.getElementById('f-phone').value.trim();
-  const rfid      = document.getElementById('f-rfid').value.trim();
-  const errEl     = document.getElementById('reg-error');
-  errEl.style.display = 'none';
-  if (!name || !sectionId || !parent || !phone || !rfid) {
-    errEl.textContent = 'All fields are required.'; errEl.style.display = 'block'; return;
-  }
-  try {
-    const r = await fetch(`${API}/students`,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({full_name:name, section_id:parseInt(sectionId), parent_name:parent, parent_phone:phone, rfid_uid:rfid}),
-    });
-    if (r.ok) { closeModal(); toast(`${name} registered!`); loadStudents(); }
-    else { const e = await r.json(); errEl.textContent = e.detail || 'Registration failed.'; errEl.style.display = 'block'; }
-  } catch(e) { errEl.textContent = 'Server error. Please try again.'; errEl.style.display = 'block'; }
-}
-
-// ── Grades & Sections tab ─────────────────────────────────────────────────────
-let gradesCache = [];
-async function loadGrades() {
-  try {
-    gradesCache = await fetch(`${API}/grades`).then(r => r.json());
-    const tbody = document.getElementById('grade-tbody');
-    // Count sections per grade
-    const allSections = await fetch(`${API}/sections`).then(r => r.json());
-    const allStudentsData = await fetch(`${API}/students?active_only=true`).then(r => r.json());
-    tbody.innerHTML = gradesCache.map(g => {
-      const secCount = allSections.filter(s => s.grade_id === g.id).length;
-      const stuCount = allStudentsData.filter(s => s.grade === g.name).length;
-      return `<tr>
-        <td><strong>${g.name}</strong></td>
-        <td>${secCount}</td>
-        <td>${stuCount}</td>
-        <td>
-          <button class="btn btn-secondary" style="font-size:.72rem;padding:4px 8px"
-            onclick="selectGradeForSections(${g.id},'${g.name}')">View Sections</button>
-          <button class="btn btn-danger" style="font-size:.72rem;padding:4px 8px;margin-left:4px"
-            onclick="deleteGrade(${g.id},'${g.name}')">Delete</button>
-        </td>
-      </tr>`;
-    }).join('');
-    if (!gradesCache.length) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;padding:24px">No grades added yet.</td></tr>';
-    // Sync grade select in sections panel
-    const sel = document.getElementById('section-grade-select');
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">— Select a grade —</option>';
-    gradesCache.forEach(g => { sel.innerHTML += `<option value="${g.id}">${g.name}</option>`; });
-    if (prev) sel.value = prev;
-  } catch(e) {}
-}
-async function addGrade() {
-  const name = document.getElementById('new-grade-name').value.trim();
-  if (!name) { toast('Enter a grade name'); return; }
-  try {
-    const r = await fetch(`${API}/grades`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
-    if (r.ok) { document.getElementById('new-grade-name').value = ''; toast(`${name} added!`); loadGrades(); }
-    else { const e = await r.json(); toast(e.detail || 'Error'); }
-  } catch(e) {}
-}
-function deleteGrade(id, name) {
-  showConfirmModal(
-    `Delete ${name}`,
-    `Delete "${name}"? All sections under it must be removed first.`,
-    async () => {
-      const r = await fetch(`${API}/grades/${id}`,{method:'DELETE'});
-      if (r.ok) { toast(`${name} deleted`); loadGrades(); }
-      else { const e = await r.json(); toast(e.detail || 'Error'); }
-    }
-  );
-}
-function selectGradeForSections(gradeId, gradeName) {
-  document.getElementById('section-grade-select').value = gradeId;
-  document.getElementById('sections-grade-label').textContent = `— ${gradeName}`;
-  loadSections(gradeId);
-}
-async function loadSections(gradeId) {
-  if (!gradeId) { document.getElementById('section-tbody').innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:24px">Select a grade.</td></tr>'; return; }
-  try {
-    const sections = await fetch(`${API}/sections?grade_id=${gradeId}`).then(r => r.json());
-    const allStudentsData = await fetch(`${API}/students?active_only=true`).then(r => r.json());
-    const tbody = document.getElementById('section-tbody');
-    tbody.innerHTML = sections.map(s => {
-      const stuCount = allStudentsData.filter(st => st.section === s.name && st.grade === s.grade_name).length;
-      return `<tr>
-        <td>${s.name}</td>
-        <td>${stuCount}</td>
-        <td><button class="btn btn-danger" style="font-size:.72rem;padding:4px 8px"
-          onclick="deleteSection(${s.id},'${s.name}')">Delete</button></td>
-      </tr>`;
-    }).join('');
-    if (!sections.length) tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:24px">No sections yet. Add one above.</td></tr>';
-  } catch(e) {}
-}
-async function addSection() {
-  const gradeId = document.getElementById('section-grade-select').value;
-  const name    = document.getElementById('new-section-name').value.trim();
-  if (!gradeId) { toast('Select a grade first'); return; }
-  if (!name)    { toast('Enter a section name'); return; }
-  try {
-    const r = await fetch(`${API}/sections`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({grade_id:parseInt(gradeId),name})});
-    if (r.ok) { document.getElementById('new-section-name').value = ''; toast(`Section "${name}" added!`); loadSections(gradeId); loadGrades(); }
-    else { const e = await r.json(); toast(e.detail || 'Error'); }
-  } catch(e) {}
-}
-function deleteSection(id, name) {
-  showConfirmModal(
-    `Delete Section "${name}"`,
-    `Delete section "${name}"? It must have no active students.`,
-    async () => {
-      const r = await fetch(`${API}/sections/${id}`,{method:'DELETE'});
-      if (r.ok) { toast(`"${name}" deleted`); loadGrades(); loadSections(document.getElementById('section-grade-select').value); }
-      else { const e = await r.json(); toast(e.detail || 'Error'); }
-    }
-  );
-}
-
-// ── School Year Promotion ─────────────────────────────────────────────────────
-async function populatePromoteSections() {
-  try {
-    const sections = await fetch(`${API}/sections`).then(r => r.json());
-    const opts = sections.map(s => `<option value="${s.id}">${s.grade_name} — ${s.name}</option>`).join('');
-    document.getElementById('promote-from').innerHTML = '<option value="">— Select source section —</option>' + opts;
-    document.getElementById('promote-to').innerHTML   = '<option value="">— Select target section —</option>' + opts;
-  } catch(e) {}
-}
-
-async function previewPromotion() {
-  const fromId = document.getElementById('promote-from').value;
-  const toId   = document.getElementById('promote-to').value;
-  if (!fromId) { toast('Select a source section'); return; }
-  if (!toId)   { toast('Select a target section'); return; }
-  if (fromId === toId) { toast('Source and target must be different'); return; }
-  try {
-    const students = await fetch(`${API}/students?section_id=${fromId}`).then(r => r.json());
-    const fromLabel = document.getElementById('promote-from').selectedOptions[0].text;
-    const toLabel   = document.getElementById('promote-to').selectedOptions[0].text;
-    const preview   = document.getElementById('promote-preview');
-    document.getElementById('promote-preview-label').textContent =
-      `${fromLabel} → ${toLabel}`;
-    const list = document.getElementById('promote-preview-list');
-    list.innerHTML = students.length
-      ? students.map(s => `
-          <label style="display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid #eee;cursor:pointer">
-            <input type="checkbox" class="promote-check" value="${s.id}" onchange="updatePromoteCount()" checked />
-            <span>${s.full_name}</span>
-          </label>`).join('')
-      : '<em style="color:#999">No active students in this section.</em>';
-    document.getElementById('promote-select-all').checked = students.length > 0;
-    preview.style.display = 'block';
-    updatePromoteCount();
-  } catch(e) { toast('Error loading preview'); }
-}
-
-function togglePromoteAll(checked) {
-  document.querySelectorAll('.promote-check').forEach(cb => cb.checked = checked);
-  updatePromoteCount();
-}
-
-function updatePromoteCount() {
-  const checks = document.querySelectorAll('.promote-check');
-  const checked = document.querySelectorAll('.promote-check:checked');
-  document.getElementById('promote-selected-count').textContent = `${checked.length} of ${checks.length} selected`;
-  const all = document.getElementById('promote-select-all');
-  if (all) all.checked = checks.length > 0 && checked.length === checks.length;
-}
-
-function confirmPromotion() {
-  const toId      = document.getElementById('promote-to').value;
-  const toLabel   = document.getElementById('promote-to').selectedOptions[0].text;
-  const studentIds = [...document.querySelectorAll('.promote-check:checked')].map(cb => parseInt(cb.value));
-  if (!studentIds.length) { toast('Select at least one student'); return; }
-  showConfirmModal(
-    'Promote Students',
-    `Move ${studentIds.length} selected student(s) to "${toLabel}"? This cannot be undone.`,
-    async () => {
-      const r = await fetch(`${API}/students/bulk-promote`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({student_ids: studentIds, to_section_id: parseInt(toId)}),
-      });
-      const data = await r.json();
-      if (r.ok) {
-        toast(`✓ ${data.promoted} student(s) promoted to ${data.to_section}`);
-        document.getElementById('promote-preview').style.display = 'none';
-        loadGrades();
-        if (document.getElementById('tab-students').classList.contains('active')) {
-          loadStudents();
-        }
-      } else {
-        toast(data.detail || 'Error promoting students');
-      }
-    }
-  );
 }
 
 // ── CSV Import ────────────────────────────────────────────────────────────────
 function openCsvImportModal() {
-  resetCsvImport();
-  document.getElementById('csv-import-modal').classList.add('open');
+  document.getElementById("csv-file").value = "";
+  document.getElementById("csv-tbody").innerHTML = "";
+  document.getElementById("csv-summary").style.display = "none";
+  document.getElementById("csv-commit-btn").disabled = true;
+  document.getElementById("csv-modal").classList.add("open");
 }
-function closeCsvImportModal() {
-  document.getElementById('csv-import-modal').classList.remove('open');
-}
-function resetCsvImport() {
-  document.getElementById('csv-file-input').value = '';
-  document.getElementById('csv-step-pick').style.display = 'block';
-  document.getElementById('csv-step-preview').style.display = 'none';
-  document.getElementById('csv-preview-tbody').innerHTML = '';
-}
-
-function downloadCsvTemplate(e) {
-  e.preventDefault();
-  const header = 'rfid_uid,full_name,grade,section,parent_name,parent_phone\n';
-  const example = 'ABC1234,Juan Dela Cruz,Grade 1,Sampaguita,Maria Dela Cruz,09171234567\n';
-  const blob = new Blob([header + example], {type: 'text/csv'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'students-template.csv'; a.click();
-  URL.revokeObjectURL(url);
-}
+function closeCsvModal() { document.getElementById("csv-modal").classList.remove("open"); }
 
 async function previewCsvImport() {
-  const input = document.getElementById('csv-file-input');
-  if (!input.files.length) { toast('Choose a CSV file first'); return; }
+  const f = document.getElementById("csv-file").files[0];
+  if (!f) { toast("Pick a CSV file first"); return; }
   const fd = new FormData();
-  fd.append('file', input.files[0]);
+  fd.append("file", f);
   try {
-    const r = await fetch(`${API}/students/import-csv/preview`, {method: 'POST', body: fd});
+    const r = await fetch(`${API}/students/import-csv/preview`, { method: "POST", body: fd });
     const data = await r.json();
-    if (!r.ok) { toast(data.detail || 'Failed to parse CSV'); return; }
+    if (!r.ok) { toast(data.detail || "Validation failed"); return; }
     renderCsvPreview(data);
-  } catch(e) { toast('Error reading CSV'); }
+    document.getElementById("csv-commit-btn").disabled = data.valid_count === 0;
+  } catch (e) { toast("Could not validate CSV"); }
 }
-
 function renderCsvPreview(data) {
-  document.getElementById('csv-step-pick').style.display    = 'none';
-  document.getElementById('csv-step-preview').style.display = 'block';
-  document.getElementById('csv-preview-summary').innerHTML = `
-    <strong>${data.total_rows}</strong> row(s) ·
-    <span style="color:var(--green);font-weight:600">${data.valid_count} valid</span> ·
-    <span style="color:var(--red);font-weight:600">${data.error_count} with errors</span>
-  `;
-  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  document.getElementById('csv-preview-tbody').innerHTML = data.rows.map(r => `
-    <tr style="background:${r.valid ? '#fff' : '#fce8e6'};border-top:1px solid #eee">
-      <td style="padding:6px 10px;color:var(--gray)">${r.row}</td>
-      <td style="padding:6px 10px;font-family:ui-monospace,monospace;font-size:.78rem">${esc(r.rfid_uid)}</td>
-      <td style="padding:6px 10px">${esc(r.full_name)}</td>
-      <td style="padding:6px 10px">${esc(r.grade)} · ${esc(r.section)}</td>
-      <td style="padding:6px 10px">${esc(r.parent_name)}</td>
-      <td style="padding:6px 10px;font-family:ui-monospace,monospace;font-size:.78rem">${esc(r.parent_phone)}</td>
-      <td style="padding:6px 10px;color:${r.valid ? 'var(--green)' : 'var(--red)'};font-weight:600">
-        ${r.valid ? '✓ OK' : esc(r.error || 'Invalid')}
-      </td>
-    </tr>`).join('');
-  const btn = document.getElementById('csv-commit-btn');
-  btn.textContent = `Import ${data.valid_count} Valid Row(s)`;
-  btn.disabled = data.valid_count === 0;
-  btn.style.opacity = data.valid_count === 0 ? '.5' : '1';
+  const sum = document.getElementById("csv-summary");
+  sum.style.display = "block";
+  sum.innerHTML = `
+    <strong>${data.total_rows}</strong> row${data.total_rows !== 1 ? "s" : ""} ·
+    <span style="color:var(--green)">${data.valid_count} valid</span> ·
+    <span style="color:var(--red)">${data.error_count} with errors</span>`;
+  const tbody = document.getElementById("csv-tbody");
+  tbody.innerHTML = data.rows.map(r => `
+    <tr style="${r.valid ? '' : 'background:var(--red-soft)'}">
+      <td>${r.row}</td>
+      <td><code>${r.rfid_uid}</code></td>
+      <td>${r.full_name}</td>
+      <td>${r.grade}</td>
+      <td>${r.section}</td>
+      <td>${r.parent_name}</td>
+      <td>${r.parent_phone}</td>
+      <td>${r.valid
+        ? '<span class="chip chip-present">OK</span>'
+        : `<span class="chip chip-absent" title="${(r.error||'').replace(/"/g,'&quot;')}">ERROR</span>
+           <div style="font-size:.72rem;color:var(--red);margin-top:2px">${r.error || ''}</div>`}</td>
+    </tr>`).join("");
 }
-
 async function commitCsvImport() {
-  const input = document.getElementById('csv-file-input');
-  if (!input.files.length) { toast('No CSV selected'); return; }
+  const f = document.getElementById("csv-file").files[0];
+  if (!f) return;
   const fd = new FormData();
-  fd.append('file', input.files[0]);
-  const btn = document.getElementById('csv-commit-btn');
-  btn.disabled = true; btn.textContent = 'Importing…';
+  fd.append("file", f);
   try {
-    const r = await fetch(`${API}/students/import-csv`, {method: 'POST', body: fd});
+    const r = await fetch(`${API}/students/import-csv`, { method: "POST", body: fd });
     const data = await r.json();
-    if (!r.ok) { toast(data.detail || 'Import failed'); btn.disabled = false; return; }
-    toast(`✓ Imported ${data.created} student(s). Skipped ${data.skipped}.`);
-    closeCsvImportModal();
-    loadStudents();
-  } catch(e) {
-    toast('Error importing CSV');
-    btn.disabled = false;
-  }
-}
-
-// ── SMS Logs tab ──────────────────────────────────────────────────────────────
-async function loadSmsLogs() {
-  const tbody = document.getElementById('sms-tbody');
-  try {
-    const s = await fetch(`${API}/status`).then(r => r.json());
-    const box = document.getElementById('modem-status');
-    if (s.modems) {
-      const {primary, secondary, fallback_enabled} = s.modems;
-      box.innerHTML = [primary, secondary].map((m,i) => `
-        <div style="display:flex;align-items:center;gap:8px;background:${m.ok?'#e6f4ea':'#fce8e6'};padding:8px 14px;border-radius:8px;font-size:.85rem">
-          <span>${m.ok?'🟢':'🔴'}</span>
-          <div><strong>${m.label}</strong>${i===1&&fallback_enabled?'<span style="font-size:.72rem;background:#e8eaf6;color:#3949ab;padding:1px 6px;border-radius:8px;margin-left:6px">FALLBACK</span>':''}<br>
-          <span style="font-size:.78rem;color:#555">${m.message}</span></div>
-        </div>`).join('');
+    if (r.ok) {
+      toast(`Imported ${data.created} student(s) (skipped ${data.skipped})`);
+      closeCsvModal();
+      loadStudents();
+    } else {
+      toast(data.detail || "Import failed");
     }
-  } catch(e) {
-    console.error('Failed to load modem status:', e);
-  }
-  try {
-    const logs = await fetch(`${API}/sms-logs?limit=100`).then(r => r.json());
-    tbody.innerHTML = logs.map(l => {
-      const modemChip = l.modem_used
-        ? `<span class="chip" style="background:#e8eaf6;color:#3949ab">${l.modem_used}</span>`
-        : '<span style="color:#bbb;font-size:.78rem">—</span>';
-      return `<tr>
-        <td style="white-space:nowrap">${new Date(l.sent_at).toLocaleString('en-PH')}</td>
-        <td>${l.student_id}</td><td>${l.phone}</td>
-        <td style="text-transform:capitalize">${l.sms_type}</td>
-        <td>${chip(l.status)}</td><td>${modemChip}</td>
-        <td style="font-size:.78rem;max-width:240px;white-space:pre-wrap">${l.message}</td>
-      </tr>`;
-    }).join('');
-    if (!logs.length) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">No SMS logs yet.</td></tr>';
-  } catch(e) {
-    console.error('Failed to load SMS logs:', e);
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red);padding:24px">Cannot load SMS logs. Check if server is running and reachable.</td></tr>';
-  }
+  } catch (e) { toast("Could not import"); }
 }
 
-// ── Auto-refresh ──────────────────────────────────────────────────────────────
-setInterval(() => {
-  if (document.getElementById('tab-scanner').classList.contains('active')) { loadStats(); loadRecentScans(); }
-}, 30000);
-
-// ── GSM Modules card (Dashboard) ──────────────────────────────────────────────
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// ── CLASSES (Grades + Sections) ───────────────────────────────────────────────
+async function ensureGradesLoaded() {
+  if (allGrades.length) return;
+  allGrades = await fetch(`${API}/grades`).then(r => r.json()).catch(() => []);
 }
-async function loadGsmModules() {
-  const list = document.getElementById('gsm-list');
-  const refreshed = document.getElementById('gsm-refreshed');
+async function loadGrades() {
   try {
-    const s = await fetch(`${API}/status`, { cache: 'no-store' }).then(r => r.json());
-    const sim = s.simulation_mode;
-    const fbk = s.modems?.fallback_enabled;
-    const modems = [
-      { ...s.modems?.primary,   role: 'PRIMARY'  },
-      { ...s.modems?.secondary, role: fbk ? 'FALLBACK' : 'DISABLED' },
-    ];
-    list.innerHTML = modems.map(m => {
-      const ok    = !!m.ok;
-      const cls   = sim ? 'sim' : (ok ? 'ok' : 'fail');
-      const port  = m.port ? esc(m.port) : '<em style="opacity:.6">not detected</em>';
-      const sig   = m.signal_label
-        ? `${esc(m.signal_label)}${m.signal_rssi != null ? ' ('+m.signal_rssi+'/31)' : ''}`
-        : '';
-      const tagCls = m.role === 'FALLBACK' ? 'fallback' : '';
+    allGrades = await fetch(`${API}/grades`).then(r => r.json());
+    document.getElementById("grade-count").textContent = `${allGrades.length} grade${allGrades.length !== 1 ? "s" : ""}`;
+    const tbody = document.getElementById("grade-tbody");
+    if (!allGrades.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty">No grades yet. Add one above.</td></tr>`;
+    } else {
+      const studentsAll = await fetch(`${API}/students?active_only=true`).then(r => r.json());
+      const sectionsAll = await fetch(`${API}/sections`).then(r => r.json());
+      tbody.innerHTML = allGrades.map(g => {
+        const sectCount = sectionsAll.filter(s => s.grade_id === g.id).length;
+        const stCount   = studentsAll.filter(s => s.grade === g.name).length;
+        return `
+          <tr>
+            <td><strong>${g.name}</strong></td>
+            <td>${sectCount}</td>
+            <td>${stCount}</td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-danger btn-sm" onclick="deleteGrade(${g.id},'${g.name.replace(/'/g,"\\'")}')">Delete</button>
+            </td>
+          </tr>`;
+      }).join("");
+    }
+    const sel = document.getElementById("section-grade-select");
+    sel.innerHTML = `<option value="">— Select grade —</option>` +
+      allGrades.map(g => `<option value="${g.id}">${g.name}</option>`).join("");
+  } catch (e) {}
+}
+async function addGrade() {
+  const name = document.getElementById("new-grade-name").value.trim();
+  if (!name) { toast("Enter a grade name"); return; }
+  const r = await fetch(`${API}/grades`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, order: 0 }),
+  });
+  if (r.ok) {
+    document.getElementById("new-grade-name").value = "";
+    toast(`Grade '${name}' added`);
+    loadGrades();
+  } else {
+    const e = await r.json();
+    toast(e.detail || "Could not add");
+  }
+}
+function deleteGrade(id, name) {
+  showConfirmModal(
+    "Delete grade",
+    `Delete ${name}? All its sections must already be removed.`,
+    async () => {
+      const r = await fetch(`${API}/grades/${id}`, { method: "DELETE" });
+      if (r.ok) { toast(`${name} deleted`); loadGrades(); }
+      else     { const e = await r.json(); toast(e.detail || "Could not delete"); }
+    }
+  );
+}
+async function loadSections(gradeId) {
+  const tbody = document.getElementById("section-tbody");
+  const label = document.getElementById("sections-grade-label");
+  if (!gradeId) {
+    tbody.innerHTML = `<tr><td colspan="3" class="empty">Pick a grade to see its sections.</td></tr>`;
+    label.textContent = "";
+    return;
+  }
+  try {
+    const sections = await fetch(`${API}/sections?grade_id=${gradeId}`).then(r => r.json());
+    const grade = allGrades.find(g => String(g.id) === String(gradeId));
+    label.textContent = grade ? `· ${grade.name}` : "";
+    if (!sections.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="empty">No sections yet for this grade.</td></tr>`;
+      return;
+    }
+    const studentsAll = await fetch(`${API}/students?active_only=true`).then(r => r.json());
+    tbody.innerHTML = sections.map(s => {
+      const stCount = studentsAll.filter(x => x.section_id === s.id).length;
       return `
-        <div class="gsm-row ${cls}">
-          <span class="gsm-dot"></span>
-          <div class="gsm-info">
-            <div class="gsm-line1">
-              ${esc(m.label || m.role)}
-              <span class="gsm-tag ${tagCls}">${m.role}</span>
-              ${sig ? `<span class="gsm-tag" style="background:#e8f0fe;color:#1a73e8">${sig}</span>` : ''}
-            </div>
-            <div class="gsm-line2">
-              <span class="gsm-port">${port}</span>
-              ${m.message ? ' · ' + esc(m.message) : ''}
-            </div>
+        <tr>
+          <td><strong>${s.name}</strong></td>
+          <td>${stCount}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="deleteSection(${s.id},'${s.name.replace(/'/g,"\\'")}')">Delete</button></td>
+        </tr>`;
+    }).join("");
+  } catch (e) {}
+}
+async function addSection() {
+  const gradeId = document.getElementById("section-grade-select").value;
+  const name = document.getElementById("new-section-name").value.trim();
+  if (!gradeId) { toast("Select a grade first"); return; }
+  if (!name)    { toast("Enter a section name"); return; }
+  const r = await fetch(`${API}/sections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ grade_id: parseInt(gradeId, 10), name }),
+  });
+  if (r.ok) {
+    document.getElementById("new-section-name").value = "";
+    toast("Section added");
+    loadSections(gradeId);
+    loadGrades();
+  } else {
+    const e = await r.json();
+    toast(e.detail || "Could not add");
+  }
+}
+function deleteSection(id, name) {
+  showConfirmModal(
+    "Delete section",
+    `Delete section ${name}? All its students must be moved or removed first.`,
+    async () => {
+      const r = await fetch(`${API}/sections/${id}`, { method: "DELETE" });
+      if (r.ok) {
+        toast(`${name} deleted`);
+        loadSections(document.getElementById("section-grade-select").value);
+        loadGrades();
+      } else {
+        const e = await r.json();
+        toast(e.detail || "Could not delete");
+      }
+    }
+  );
+}
+
+// ── Promotion ─────────────────────────────────────────────────────────────────
+let promoteStudents = [];
+let promoteSelected = new Set();
+async function populatePromoteSections() {
+  try {
+    const sections = await fetch(`${API}/sections`).then(r => r.json());
+    const opts = sections.map(s => `<option value="${s.id}">${s.grade_name} · ${s.name}</option>`).join("");
+    document.getElementById("promote-from").innerHTML = `<option value="">— Select source —</option>` + opts;
+    document.getElementById("promote-to").innerHTML   = `<option value="">— Select target —</option>` + opts;
+  } catch (e) {}
+}
+function loadPromotePreview() { document.getElementById("promote-preview").style.display = "none"; }
+async function previewPromotion() {
+  const from = document.getElementById("promote-from").value;
+  const to   = document.getElementById("promote-to").value;
+  if (!from || !to)   { toast("Select FROM and TO sections"); return; }
+  if (from === to)    { toast("FROM and TO must be different"); return; }
+  try {
+    const students = await fetch(`${API}/students?active_only=true&section_id=${from}`).then(r => r.json());
+    promoteStudents = students;
+    promoteSelected = new Set(students.map(s => s.id));
+    const fromOpt = document.querySelector(`#promote-from option[value="${from}"]`);
+    const toOpt   = document.querySelector(`#promote-to option[value="${to}"]`);
+    document.getElementById("promote-preview-label").textContent =
+      `${fromOpt?.textContent || from} → ${toOpt?.textContent || to}`;
+    renderPromoteList();
+    document.getElementById("promote-select-all").checked = true;
+    document.getElementById("promote-preview").style.display = "block";
+  } catch (e) { toast("Could not load preview"); }
+}
+function renderPromoteList() {
+  const list = document.getElementById("promote-preview-list");
+  list.innerHTML = promoteStudents.map(s => `
+    <label style="display:flex;gap:8px;align-items:center;padding:5px 0;cursor:pointer">
+      <input type="checkbox" ${promoteSelected.has(s.id) ? "checked" : ""} onchange="togglePromote(${s.id},this.checked)" />
+      <span>${s.full_name}</span>
+    </label>`).join("");
+  document.getElementById("promote-selected-count").textContent = `${promoteSelected.size} of ${promoteStudents.length} selected`;
+}
+function togglePromote(id, on) {
+  if (on) promoteSelected.add(id); else promoteSelected.delete(id);
+  document.getElementById("promote-selected-count").textContent = `${promoteSelected.size} of ${promoteStudents.length} selected`;
+  document.getElementById("promote-select-all").checked = promoteSelected.size === promoteStudents.length;
+}
+function togglePromoteAll(on) {
+  promoteSelected = on ? new Set(promoteStudents.map(s => s.id)) : new Set();
+  renderPromoteList();
+}
+function confirmPromotion() {
+  if (!promoteSelected.size) { toast("Nothing selected"); return; }
+  const to = parseInt(document.getElementById("promote-to").value, 10);
+  showConfirmModal(
+    "Promote students",
+    `Move ${promoteSelected.size} student(s) to the target section?`,
+    async () => {
+      const r = await fetch(`${API}/students/bulk-promote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_ids: [...promoteSelected], to_section_id: to }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        toast(`Promoted ${data.promoted} student(s) to ${data.to_section}`);
+        document.getElementById("promote-preview").style.display = "none";
+        loadGrades();
+        loadStudents();
+      } else {
+        toast(data.detail || "Promotion failed");
+      }
+    }
+  );
+}
+
+// ── SMS & Modems ──────────────────────────────────────────────────────────────
+async function loadSmsLogs() {
+  try {
+    smsLogs = await fetch(`${API}/sms-logs?limit=50`).then(r => r.json());
+    const tbody = document.getElementById("sms-tbody");
+    if (!smsLogs.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="empty-icon">💬</div>No SMS sent yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = smsLogs.map(s => `
+      <tr>
+        <td>${fmtDateTime(s.sent_at)}</td>
+        <td>${(allStudents.find(x => x.id === s.student_id) || {}).full_name || `ID ${s.student_id}`}</td>
+        <td>${s.phone}</td>
+        <td>${s.sms_type}</td>
+        <td>${chip(s.status)}${s.error_msg ? `<div style="font-size:.7rem;color:var(--red);margin-top:2px">${s.error_msg}</div>` : ""}</td>
+        <td>${s.modem_used || "—"}</td>
+        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(s.message||'').replace(/"/g,'&quot;')}">${s.message}</td>
+      </tr>`).join("");
+  } catch (e) {}
+}
+// Normalise the modem payload: backend returns {primary, secondary, fallback_enabled}.
+// We turn that into an array the renderer can iterate.
+function _modemsAsArray(modems) {
+  if (!modems) return [];
+  if (Array.isArray(modems)) return modems;
+  const out = [];
+  if (modems.primary)   out.push({ ...modems.primary,   slot: "Primary" });
+  if (modems.secondary) out.push({ ...modems.secondary, slot: "Secondary" });
+  return out;
+}
+
+function _renderModemCards(modems) {
+  const list = _modemsAsArray(modems);
+  if (!list.length) {
+    return `<div class="empty" style="padding:14px">No modems configured.</div>`;
+  }
+  return list.map(m => {
+    const ok       = m.connected || m.ok;
+    const name     = m.label || m.name || m.slot || m.port || "Modem";
+    const port     = m.port || "—";
+    const sigLabel = m.signal_label || m.signal || "";
+    const rssi     = (m.signal_rssi != null) ? ` (${m.signal_rssi}/31)` : "";
+    const msg      = m.message || m.error || "";
+    return `
+      <div class="modem-card ${ok ? "ok" : "error"}">
+        <div style="font-size:1.4rem">${ok ? "📶" : "⚠️"}</div>
+        <div>
+          <div class="modem-name">${name}</div>
+          <div class="modem-meta">${port}${sigLabel ? ` · Signal ${sigLabel}${rssi}` : ""}${msg ? ` · ${msg}` : ""}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function loadModemStatus() {
+  try {
+    const s    = await fetch(`${API}/status`).then(r => r.json());
+    const html = _renderModemCards(s.modems);
+    const target    = document.getElementById("modem-status");
+    const sysTarget = document.getElementById("system-modem-status");
+    if (target)    target.innerHTML    = html;
+    if (sysTarget) sysTarget.innerHTML = html;
+  } catch (e) {}
+}
+
+async function rescanModems() {
+  const btn = document.getElementById("modem-rescan-btn");
+  const original = btn ? btn.innerHTML : "";
+  if (btn) { btn.disabled = true; btn.innerHTML = "Scanning…"; }
+  try {
+    const modems = await fetch(`${API}/modems/rescan`, { method: "POST" }).then(r => r.json());
+    const html   = _renderModemCards(modems);
+    const target    = document.getElementById("modem-status");
+    const sysTarget = document.getElementById("system-modem-status");
+    if (target)    target.innerHTML    = html;
+    if (sysTarget) sysTarget.innerHTML = html;
+    const list = _modemsAsArray(modems);
+    const okCount = list.filter(m => m.connected || m.ok).length;
+    toast(`Rescan done — ${okCount}/${list.length} modem(s) responding`);
+  } catch (e) {
+    toast("Rescan failed — server unreachable");
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = original; }
+  }
+}
+
+// ── Scanner Heartbeats ────────────────────────────────────────────────────────
+async function loadScannerHeartbeats() {
+  try {
+    const list = await fetch(`${API}/scanner-heartbeat`).then(r => r.json());
+    const container = document.getElementById("scanner-hb-cards");
+    if (!container) return;
+    if (!list.length) {
+      container.innerHTML = `<div class="empty" style="padding:14px;width:100%">No scanners have reported yet. Pi scanners auto-register when running.</div>`;
+      document.getElementById("scanner-hb-meta").textContent = "No scanners online";
+      return;
+    }
+    const online = list.filter(s => s.online).length;
+    document.getElementById("scanner-hb-meta").textContent =
+      `${online} of ${list.length} online`;
+    container.innerHTML = list.map(s => {
+      const cls   = s.online ? "ok" : "error";
+      const icon  = s.online ? "🟢" : "🔴";
+      const ago   = s.online ? "Online now" :
+                    s.seconds_ago < 3600 ? `${Math.round(s.seconds_ago/60)} min ago` :
+                    s.seconds_ago < 86400 ? `${Math.round(s.seconds_ago/3600)} hr ago` :
+                                           `${Math.round(s.seconds_ago/86400)} d ago`;
+      return `
+        <div class="modem-card ${cls}" style="min-width:220px">
+          <div style="font-size:1.4rem">${icon}</div>
+          <div style="flex:1">
+            <div class="modem-name">${(s.label || ('Scanner ' + s.scanner_id))}</div>
+            <div class="modem-meta">id=${s.scanner_id} · ${ago}${s.ip_address ? ` · ${s.ip_address}` : ''}</div>
           </div>
         </div>`;
-    }).join('');
-    refreshed.textContent = `Last checked: ${new Date().toLocaleTimeString('en-PH')}`
-      + (sim ? ' · simulation mode' : '');
-  } catch (e) {
-    list.innerHTML = `<div class="gsm-row fail"><span class="gsm-dot"></span><div class="gsm-info"><div class="gsm-line1">Server unreachable</div><div class="gsm-line2">${esc(e.message || e)}</div></div></div>`;
-    refreshed.textContent = `Last checked: ${new Date().toLocaleTimeString('en-PH')}`;
+    }).join("");
+  } catch (e) {}
+}
+
+// ── Reports ───────────────────────────────────────────────────────────────────
+async function initReports() {
+  const m = document.getElementById("rep-month");
+  if (!m.value) {
+    const now = new Date();
+    m.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
+  const sel = document.getElementById("rep-filter");
+  if (sel.options.length <= 1) {
+    try {
+      const [grades, sections] = await Promise.all([
+        fetch(`${API}/grades`).then(r => r.json()),
+        fetch(`${API}/sections`).then(r => r.json()),
+      ]);
+      let opts = `<option value="">All students (school-wide)</option>`;
+      if (grades.length) {
+        opts += `<optgroup label="By Grade">`;
+        opts += grades.map(g => `<option value="grade:${g.id}">${g.name} (whole grade)</option>`).join("");
+        opts += `</optgroup>`;
+      }
+      if (sections.length) {
+        opts += `<optgroup label="By Section">`;
+        opts += sections.map(s => `<option value="section:${s.id}">${s.grade_name || ''} · ${s.name}</option>`).join("");
+        opts += `</optgroup>`;
+      }
+      sel.innerHTML = opts;
+    } catch (e) {}
   }
 }
-setInterval(() => {
-  if (document.getElementById('tab-scanner').classList.contains('active')) loadGsmModules();
-}, 15000);
+
+function downloadReport(format) {
+  const m = document.getElementById("rep-month").value;
+  if (!m) { toast("Pick a month"); return; }
+  const [year, month] = m.split("-").map(Number);
+  const filter = document.getElementById("rep-filter").value;
+  const params = new URLSearchParams({ year, month, format });
+  if (filter.startsWith("grade:"))   params.set("grade_id",   filter.split(":")[1]);
+  if (filter.startsWith("section:")) params.set("section_id", filter.split(":")[1]);
+
+  const status = document.getElementById("rep-status");
+  status.textContent = "Preparing download...";
+  const url = `${API}/reports/monthly?${params}`;
+  // Use anchor download to keep the page state intact
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = ""; // server sends Content-Disposition
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    a.remove();
+    status.textContent = `Downloaded ${format.toUpperCase()} for ${m}.`;
+  }, 600);
+}
+
+// ── Holidays ──────────────────────────────────────────────────────────────────
+async function loadHolidays() {
+  // Sync year is hidden now — always use current year for the manual re-sync button
+  const yearInput = document.getElementById("sync-year");
+  if (yearInput) yearInput.value = new Date().getFullYear();
+  const sp = document.getElementById("sync-specials");
+  if (sp) sp.checked = true;
+  try {
+    const list = await fetch(`${API}/holidays`).then(r => r.json());
+    const tbody = document.getElementById("hol-tbody");
+    document.getElementById("hol-count").textContent =
+      `${list.length} holiday${list.length !== 1 ? "s" : ""}`;
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty">No holidays configured yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(h => `
+      <tr>
+        <td><strong>${h.date}</strong></td>
+        <td>${h.name}</td>
+        <td>${h.is_recurring ? '<span class="chip chip-present">YEARLY</span>' : '<span class="chip chip-excused">ONCE</span>'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteHoliday(${h.id},'${h.name.replace(/'/g,"\\'")}')">Delete</button></td>
+      </tr>`).join("");
+  } catch (e) {}
+}
+async function addHoliday() {
+  const date = document.getElementById("hol-date").value;
+  const name = document.getElementById("hol-name").value.trim();
+  const is_recurring = document.getElementById("hol-recurring").checked;
+  if (!date) { toast("Pick a date"); return; }
+  if (!name) { toast("Enter a holiday name"); return; }
+  try {
+    const r = await fetch(`${API}/holidays`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, name, is_recurring }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      toast(`Added: ${data.name}`);
+      document.getElementById("hol-name").value = "";
+      document.getElementById("hol-date").value = "";
+      document.getElementById("hol-recurring").checked = false;
+      loadHolidays();
+    } else {
+      toast(data.detail || "Could not add holiday");
+    }
+  } catch (e) { toast("Could not reach server"); }
+}
+function deleteHoliday(id, name) {
+  showConfirmModal(
+    "Delete holiday",
+    `Remove ${name} from the calendar?`,
+    async () => {
+      const r = await fetch(`${API}/holidays/${id}`, { method: "DELETE" });
+      if (r.ok) { toast("Holiday removed"); loadHolidays(); }
+      else     { toast("Could not delete"); }
+    }
+  );
+}
+
+async function syncPhHolidays() {
+  const year = parseInt(document.getElementById("sync-year").value, 10);
+  const specials = document.getElementById("sync-specials").checked;
+  const box = document.getElementById("sync-result");
+  box.style.display = "block";
+  box.style.background = "var(--brand-soft)";
+  box.style.color = "var(--brand)";
+  box.textContent = `Syncing Philippine holidays for ${year}...`;
+  if (!year || year < 2000 || year > 2100) {
+    box.style.background = "var(--red-soft)";
+    box.style.color = "var(--red)";
+    box.textContent = "Enter a year between 2000 and 2100.";
+    return;
+  }
+  try {
+    const params = new URLSearchParams({ year, include_specials: specials });
+    const r = await fetch(`${API}/holidays/sync-ph?${params}`, { method: "POST" });
+    const data = await r.json();
+    if (!r.ok) {
+      box.style.background = "var(--red-soft)";
+      box.style.color = "var(--red)";
+      box.textContent = data.detail || "Sync failed.";
+      return;
+    }
+    if (data.added === 0 && data.skipped === 0) {
+      box.style.background = "var(--yellow-soft)";
+      box.style.color = "var(--yellow)";
+      box.textContent = `No PH holiday data available for ${year}.`;
+    } else if (data.added === 0) {
+      box.style.background = "var(--yellow-soft)";
+      box.style.color = "var(--yellow)";
+      box.textContent = `All ${data.skipped} holiday(s) for ${year} already in your calendar.`;
+    } else {
+      box.style.background = "var(--green-soft)";
+      box.style.color = "var(--green)";
+      const sample = data.items.slice(0, 5).map(h => `${h.date} — ${h.name}`).join("; ");
+      const more   = data.items.length > 5 ? ` …and ${data.items.length - 5} more` : "";
+      box.innerHTML = `<strong>✓ Added ${data.added}</strong> holiday(s) for ${data.year}` +
+                      (data.skipped ? ` (skipped ${data.skipped} already present)` : "") +
+                      `<div style="margin-top:6px;color:var(--text-2);font-size:.78rem">${sample}${more}</div>`;
+    }
+    loadHolidays();
+  } catch (e) {
+    box.style.background = "var(--red-soft)";
+    box.style.color = "var(--red)";
+    box.textContent = "Could not reach server.";
+  }
+}
+
+// ── System ────────────────────────────────────────────────────────────────────
+async function loadSystemInfo() {
+  loadModemStatus();
+  try {
+    const s = await fetch(`${API}/status`).then(r => r.json());
+    document.getElementById("system-info").innerHTML = `
+      <div><strong>School:</strong> ${s.school || "—"}</div>
+      <div><strong>Mode:</strong> ${s.simulation_mode ? "Simulation (no real SMS sent)" : "Production"}</div>
+      <div><strong>Modems configured:</strong> ${(s.modems || []).length}</div>
+      <div><strong>AM absent check:</strong> ${fmtSched(s.absent_schedule?.am)}</div>
+      <div><strong>PM absent check:</strong> ${fmtSched(s.absent_schedule?.pm)}</div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.78rem;color:var(--text-3)">
+        Dashboard: ${location.origin}<br/>
+        Scanner 1: ${location.origin}/scanner?id=1&label=Entrance<br/>
+        Scanner 2: ${location.origin}/scanner?id=2&label=Exit
+      </div>`;
+  } catch (e) {
+    document.getElementById("system-info").innerHTML = `<div class="empty">Could not reach server.</div>`;
+  }
+}
+
+// ── RFID test scan (on Scanner page) ──────────────────────────────────────────
+function setupRfidInput() {
+  const el = document.getElementById("rfid-input");
+  if (!el) return;
+  let buf = null;
+  el.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitRfid(el.value);
+      el.value = "";
+    }
+  });
+  el.addEventListener("input", () => {
+    clearTimeout(buf);
+    buf = setTimeout(() => {
+      if (el.value.trim().length >= 4) {
+        submitRfid(el.value);
+        el.value = "";
+      }
+    }, 300);
+  });
+}
+async function submitRfid(uid) {
+  uid = (uid || "").trim().toUpperCase();
+  if (!uid) return;
+  const banner = document.getElementById("result-banner");
+  banner.style.display = "block";
+  banner.style.background = "var(--brand-soft)";
+  banner.style.color = "var(--brand)";
+  banner.textContent = `Sending ${uid}...`;
+  try {
+    const r = await fetch(`${API}/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rfid_uid: uid, scanner_id: "admin" }),
+    });
+    const data = await r.json();
+    if (data.success) {
+      banner.style.background = "var(--green-soft)";
+      banner.style.color = "var(--green)";
+      banner.textContent = `✓ ${data.message}`;
+    } else {
+      banner.style.background = "var(--yellow-soft)";
+      banner.style.color = "var(--yellow)";
+      banner.textContent = `⚠ ${data.message}`;
+    }
+  } catch (e) {
+    banner.style.background = "var(--red-soft)";
+    banner.style.color = "var(--red)";
+    banner.textContent = "Could not reach server.";
+  }
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-initStatus(); loadStats(); loadRecentScans(); loadGsmModules();
+document.addEventListener("DOMContentLoaded", () => {
+  initStatus();
+  tickClock();
+  setInterval(tickClock, 30 * 1000);
+  setupRfidInput();
+  // Real-time push from server (scans, etc.) — instant dashboard updates.
+  connectLiveEvents();
+  // default page
+  loadDashboard();
+  // auto-refresh dashboard every 60s
+  setInterval(() => {
+    const active = document.querySelector(".nav-item.active")?.dataset.page;
+    if (active === "dashboard") {
+      loadSummary();
+      loadRecentScans();
+      loadStudentCount();
+      loadScannerHeartbeats();
+    }
+  }, 60 * 1000);
+
+  // Heartbeat-only refresh every 30s (cheaper) for snappier scanner status
+  setInterval(() => {
+    const active = document.querySelector(".nav-item.active")?.dataset.page;
+    if (active === "dashboard") loadScannerHeartbeats();
+  }, 30 * 1000);
+});
+
+// click outside sidebar on mobile to close
+document.addEventListener("click", (e) => {
+  const sb = document.getElementById("sidebar");
+  if (window.innerWidth <= 900 && sb.classList.contains("open") &&
+      !sb.contains(e.target) && !e.target.classList.contains("mobile-toggle")) {
+    sb.classList.remove("open");
+  }
+});
 </script>
 </body>
 </html>

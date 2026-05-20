@@ -9,6 +9,7 @@ __pycache__/
 # Build artifacts
 dist/
 build/
+installer/Output/
 
 # macOS Finder duplicate artifacts
 * 2.sh

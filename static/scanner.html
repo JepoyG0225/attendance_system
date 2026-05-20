@@ -409,6 +409,19 @@ async function pollServerConn() {
 }
 setInterval(pollServerConn, 5000); pollServerConn();
 
+// ── Heartbeat (lets the dashboard show this scanner as online) ────────────────
+async function sendHeartbeat() {
+  try {
+    await fetch(`${API}/scanner-heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scanner_id: SCANNER_ID, label: SCANNER_LABEL }),
+      cache: 'no-store',
+    });
+  } catch (_) { /* ignore network blips */ }
+}
+setInterval(sendHeartbeat, 30000); sendHeartbeat();
+
 // ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock() {
   const now = new Date();

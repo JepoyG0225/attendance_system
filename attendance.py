@@ -16,7 +16,7 @@ import logging
 import threading
 from queue import Queue
 
-from database import Student, Attendance, SMSLog, AttendanceStatus, SMSStatus, SessionLocal
+from database import Student, Attendance, SMSLog, Holiday, AttendanceStatus, SMSStatus, SessionLocal
 from sms import send_sms
 from config import (
     SCHOOL_NAME, SCHOOL_TIMEZONE,
@@ -26,6 +26,16 @@ from config import (
     SMS_PM_IN_TEMPLATE, SMS_PM_OUT_TEMPLATE,
     SMS_ABSENT_TEMPLATE, SMS_PM_ABSENT_TEMPLATE,
 )
+# Optional newer config values; provide sensible defaults if the user's
+# config.py was written before these settings existed.
+try:
+    from config import SKIP_WEEKENDS
+except ImportError:
+    SKIP_WEEKENDS = True
+try:
+    from config import WEEKEND_DAYS
+except ImportError:
+    WEEKEND_DAYS = (5, 6)   # Saturday, Sunday
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(SCHOOL_TIMEZONE)
@@ -51,6 +61,28 @@ def _fmt_time(t: dtime) -> str:
 
 def _fmt_date(d: date) -> str:
     return d.strftime("%B %d, %Y")
+
+
+def is_school_day(d: date, db: Session) -> tuple[bool, Optional[str]]:
+    """Return (is_school_day, reason_if_not).
+    Skips configured weekend days and any date in the holidays table
+    (recurring holidays match by month+day regardless of year).
+    """
+    if SKIP_WEEKENDS and d.weekday() in WEEKEND_DAYS:
+        return False, "Weekend"
+    fixed = db.query(Holiday).filter(Holiday.date == d, Holiday.is_recurring == False).first()
+    if fixed:
+        return False, fixed.name
+    # Recurring: same month + day, any year
+    recurring = (
+        db.query(Holiday)
+        .filter(Holiday.is_recurring == True)
+        .all()
+    )
+    for h in recurring:
+        if h.date.month == d.month and h.date.day == d.day:
+            return False, h.name
+    return True, None
 
 def _sms(template: str, student: Student, t: dtime, d: date) -> str:
     return template.format(
@@ -305,8 +337,14 @@ def check_absences(session: str, db: Session) -> dict:
     session="am"  → run at 8:30 AM: find students with no morning scan → mark absent + SMS
     session="pm"  → run at 1:30 PM: find students who came in AM but never returned → SMS
     Returns {"notified": int, "session": str, "names": list}
+    Skipped automatically on weekends and configured holidays.
     """
     today = _today()
+    school_day, reason = is_school_day(today, db)
+    if not school_day:
+        logger.info(f"[Absent Check {session.upper()}] Skipped — non-school day ({reason}).")
+        return {"notified": 0, "session": session, "names": [], "skipped": True, "reason": reason}
+
     now_time = _now().time().replace(microsecond=0)
     students = db.query(Student).filter(Student.is_active == True).all()
     notified = []

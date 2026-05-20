@@ -5,3 +5,10 @@ pydantic==2.9.2
 pyserial==3.5
 python-multipart==0.0.9
 apscheduler==3.10.4
+# Desktop window for the admin UI (Windows uses Edge WebView2)
+pywebview==5.3.2
+# Report generation (Excel + PDF)
+openpyxl==3.1.5
+reportlab==4.2.5
+# Philippine holiday calendar source
+holidays==0.58

@@ -125,6 +125,30 @@ class Attendance(Base):
     student     = relationship("Student", back_populates="attendances")
 
 
+# ── Holiday ────────────────────────────────────────────────────────────────────
+
+class Holiday(Base):
+    __tablename__ = "holidays"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    date         = Column(Date, nullable=False, index=True, unique=True)
+    name         = Column(String(100), nullable=False)
+    is_recurring = Column(Boolean, default=False)   # repeats every year on same month/day
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── Scanner Heartbeat ──────────────────────────────────────────────────────────
+
+class ScannerHeartbeat(Base):
+    __tablename__ = "scanner_heartbeats"
+
+    scanner_id   = Column(String(50), primary_key=True)
+    label        = Column(String(100), nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    ip_address   = Column(String(45), nullable=True)
+    user_agent   = Column(String(255), nullable=True)
+
+
 # ── SMS Log ────────────────────────────────────────────────────────────────────
 
 class SMSLog(Base):
