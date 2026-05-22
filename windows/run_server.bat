@@ -23,8 +23,8 @@ echo   Student Attendance System - Server
 echo =========================================
 echo.
 echo Dashboard: http://localhost:8000
-echo Scanner 1: http://localhost:8000/scanner?id=1^&label=Entrance
-echo Scanner 2: http://localhost:8000/scanner?id=2^&label=Exit
+echo Scanner 1: http://localhost:8000/scanner?id=1^&label=Scanner%%201
+echo Scanner 2: http://localhost:8000/scanner?id=2^&label=Scanner%%202
 echo.
 echo Log file:  %LOG_FILE%
 echo Press Ctrl+C in this window to stop the server.

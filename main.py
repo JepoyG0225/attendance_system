@@ -3,8 +3,8 @@ FastAPI Application — Student Attendance System
 ================================================
 Run: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 Dashboard:  http://localhost:8000
-Scanner 1:  http://localhost:8000/scanner?id=1&label=Entrance
-Scanner 2:  http://localhost:8000/scanner?id=2&label=Exit
+Scanner 1:  http://localhost:8000/scanner?id=1&label=Scanner%201
+Scanner 2:  http://localhost:8000/scanner?id=2&label=Scanner%202
 """
 
 import os

@@ -47,7 +47,7 @@ Open `http://localhost:8000` on the server itself, or from any other device on t
 Each Raspberry Pi scanner needs to point at this server. The Pi's kiosk URL is in `~/.config/labwc/autostart` on the Pi. Change it to:
 
 ```
-http://<this-pc-hostname>.local:8000/scanner?id=1&label=Entrance
+http://<this-pc-hostname>.local:8000/scanner?id=1&label=Scanner%201
 ```
 
 Set the Windows hostname under **Settings → System → About → Rename this PC** before deployment.
