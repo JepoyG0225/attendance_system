@@ -24,9 +24,17 @@ call :log "============================================"
 call :log "post_install.cmd action=%ACTION% app=%APP_DIR%"
 call :log "============================================"
 
-:: ── Locate Python: prefer "py -3", fall back to "python" ─────────────────────
+:: ── Locate Python 3.11 specifically ─────────────────────────────────────────
+:: The wheels bundled with this installer are pinned to cp311 / win_amd64, so
+:: we MUST create the venv with Python 3.11. Look in the standard install
+:: locations first, then the py launcher, then plain `python` as fallbacks.
 set "PYTHON_CMD="
-where py >nul 2>&1 && set "PYTHON_CMD=py -3"
+if exist "%ProgramFiles%\Python311\python.exe"                       set "PYTHON_CMD=%ProgramFiles%\Python311\python.exe"
+if "%PYTHON_CMD%"=="" if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+if "%PYTHON_CMD%"=="" where py >nul 2>&1 && (
+    py -3.11 --version >nul 2>&1 && set "PYTHON_CMD=py -3.11"
+)
+if "%PYTHON_CMD%"=="" where py >nul 2>&1 && set "PYTHON_CMD=py -3"
 if "%PYTHON_CMD%"=="" (
     where python >nul 2>&1 && set "PYTHON_CMD=python"
 )
@@ -60,14 +68,26 @@ if exist ".venv\Scripts\python.exe" (
     )
 )
 
-call :log "Upgrading pip ..."
-".venv\Scripts\python.exe" -m pip install --upgrade pip --disable-pip-version-check >>"%LOG_FILE%" 2>&1
-
-call :log "Installing requirements.txt ..."
-".venv\Scripts\python.exe" -m pip install -r "requirements.txt" --disable-pip-version-check >>"%LOG_FILE%" 2>&1
-if errorlevel 1 (
-    call :log "[ERROR] pip install failed - check internet connection."
-    exit /b 6
+:: ── Install dependencies OFFLINE from bundled wheels ──────────────────────────
+:: --no-index    : don't reach out to PyPI (no internet needed)
+:: --find-links : look here for wheels and sdists
+:: We prefer the bundled wheels/ folder; falls back to online install if it's
+:: missing so dev builds without the wheel cache still work.
+if exist "wheels\" (
+    call :log "Installing requirements OFFLINE from bundled wheels/ ..."
+    ".venv\Scripts\python.exe" -m pip install --no-index --find-links "wheels" -r "requirements.txt" --disable-pip-version-check >>"%LOG_FILE%" 2>&1
+    if errorlevel 1 (
+        call :log "[ERROR] Offline pip install failed. Check that wheels\ contains all required packages."
+        exit /b 6
+    )
+) else (
+    call :log "wheels\ not bundled - falling back to online pip install (requires internet)."
+    ".venv\Scripts\python.exe" -m pip install --upgrade pip --disable-pip-version-check >>"%LOG_FILE%" 2>&1
+    ".venv\Scripts\python.exe" -m pip install -r "requirements.txt" --disable-pip-version-check >>"%LOG_FILE%" 2>&1
+    if errorlevel 1 (
+        call :log "[ERROR] Online pip install failed - check internet connection."
+        exit /b 6
+    )
 )
 call :log "venv setup OK."
 exit /b 0

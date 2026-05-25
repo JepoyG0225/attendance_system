@@ -104,6 +104,11 @@ Source: "drivers\CH341SER.EXE";  DestDir: "{app}\drivers"; Flags: ignoreversion
 ; {app} because once installed it lives in Program Files\Python311 system-wide.
 Source: "python\python-3.11.9-amd64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: NeedsPython
 
+; Pre-downloaded wheel cache so `pip install -r requirements.txt` works fully
+; offline on school PCs with no internet. Pinned to cp311 / win_amd64 — must
+; match the Python version we install above (3.11.9).
+Source: "wheels\*"; DestDir: "{app}\wheels"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 [Icons]
 ; Start Menu (always)
 Name: "{group}\Attendance System";        Filename: "{app}\windows\run_app.bat";    WorkingDir: "{app}"; IconFilename: "{app}\static\app-icon.ico"; Comment: "Open the Attendance System (native app)"
@@ -196,14 +201,21 @@ Type: filesandordirs; Name: "{app}\__pycache__"
 ; ============================================================================
 [Code]
 const
-  MIN_PY_MAJOR = 3;
-  MIN_PY_MINOR = 11;
+  { Wheels in installer/wheels/ are pinned cp311 / win_amd64. So we don't
+    just want "Python >= 3.11" — we need 3.11 specifically. If the system
+    has 3.12 or 3.13 only, install bundled 3.11.9 alongside it (safe; the
+    `py` launcher will pick the right one). }
+  REQ_PY_MAJOR = 3;
+  REQ_PY_MINOR = 11;
 
 var
   PythonOk: Boolean;
   PythonVersion: String;
 
-{ Run "py -3 --version" or "python --version" and parse out the version. }
+{ Check whether Python 3.11.x specifically is installed.
+  We use `py -3.11 --version` which only succeeds when 3.11 is registered
+  with the Python launcher. Other minor versions (3.10, 3.12, 3.13) return
+  non-zero and we fall through to "needs install". }
 function DetectPython(): Boolean;
 var
   TmpFile: String;
@@ -215,30 +227,21 @@ begin
   Result := False;
   TmpFile := ExpandConstant('{tmp}\pyver.txt');
 
-  { Try "py -3 --version" first (Python Launcher for Windows) }
+  { Ask for Python 3.11 specifically via the py launcher. }
   if not Exec(ExpandConstant('{cmd}'),
-              '/c py -3 --version > "' + TmpFile + '" 2>&1',
+              '/c py -3.11 --version > "' + TmpFile + '" 2>&1',
               '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     ResultCode := 1;
-
-  if ResultCode <> 0 then
-  begin
-    { Fall back to plain "python --version" }
-    if not Exec(ExpandConstant('{cmd}'),
-                '/c python --version > "' + TmpFile + '" 2>&1',
-                '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-      ResultCode := 1;
-  end;
 
   if (ResultCode = 0) and LoadStringFromFile(TmpFile, Output) then
   begin
     VerStr := Trim(String(Output));
-    { Expect "Python 3.11.5" -> strip "Python " prefix }
+    { Expect "Python 3.11.9" -> strip "Python " prefix }
     P := Pos(' ', VerStr);
     if P > 0 then VerStr := Copy(VerStr, P + 1, Length(VerStr));
     PythonVersion := VerStr;
 
-    { Split major.minor }
+    { Confirm major.minor is exactly 3.11.x }
     P := Pos('.', VerStr);
     if P > 0 then
     begin
@@ -253,8 +256,7 @@ begin
       MajorVal := StrToIntDef(MajorStr, 0);
       MinorVal := StrToIntDef(MinorStr, 0);
 
-      if (MajorVal > MIN_PY_MAJOR) or
-         ((MajorVal = MIN_PY_MAJOR) and (MinorVal >= MIN_PY_MINOR)) then
+      if (MajorVal = REQ_PY_MAJOR) and (MinorVal = REQ_PY_MINOR) then
         Result := True;
     end;
   end;
@@ -291,9 +293,9 @@ var
 begin
   S := '';
   if PythonOk then
-    S := S + 'Detected Python:' + NewLine + Space + PythonVersion + NewLine + NewLine
+    S := S + 'Detected Python 3.11:' + NewLine + Space + PythonVersion + NewLine + NewLine
   else
-    S := S + 'Python not found — will install Python 3.11.9 (bundled).' + NewLine + NewLine;
+    S := S + 'Python 3.11 not found — will install Python 3.11.9 (bundled).' + NewLine + NewLine;
   S := S + MemoDirInfo + NewLine + NewLine;
   if MemoTasksInfo <> '' then
     S := S + 'Options:' + NewLine + MemoTasksInfo + NewLine;

@@ -70,9 +70,31 @@ if not exist "python\python-3.11.9-amd64.exe" (
     exit /b 1
 )
 
+:: Wheel cache — required so `pip install -r requirements.txt` works fully
+:: offline on school PCs with no internet. Generate with Python 3.11:
+::   py -3.11 -m pip download -r ..\requirements.txt -d wheels\ --prefer-binary
+set "WHEEL_COUNT=0"
+for %%F in ("wheels\*.whl" "wheels\*.tar.gz") do set /a WHEEL_COUNT+=1
+if %WHEEL_COUNT% LSS 10 (
+    echo.
+    echo [ERROR] Missing or empty wheel cache:
+    echo     installer\wheels\
+    echo.
+    echo Found only %WHEEL_COUNT% wheel files - need ~40 for offline install.
+    echo.
+    echo Regenerate with Python 3.11 installed:
+    echo   py -3.11 -m pip download -r ..\requirements.txt -d wheels\ --prefer-binary
+    echo.
+    echo Without this, the school PC needs internet during install.
+    echo.
+    pause
+    exit /b 1
+)
+
 echo Using compiler: %ISCC%
 echo Driver bundled: drivers\CH341SER.EXE
 echo Python bundled: python\python-3.11.9-amd64.exe
+echo Wheels bundled: %WHEEL_COUNT% files in wheels\
 echo.
 
 :: ── Compile ─────────────────────────────────────────────────────────────────
