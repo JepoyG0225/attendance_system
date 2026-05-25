@@ -54,8 +54,25 @@ if not exist "drivers\CH341SER.EXE" (
     exit /b 1
 )
 
+if not exist "python\python-3.11.9-amd64.exe" (
+    echo.
+    echo [ERROR] Missing bundled Python runtime:
+    echo     installer\python\python-3.11.9-amd64.exe
+    echo.
+    echo Python is bundled so school PCs don't need a pre-existing install.
+    echo.
+    echo Download from:
+    echo   https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
+    echo.
+    echo Save the file at the path above, then re-run this build script.
+    echo.
+    pause
+    exit /b 1
+)
+
 echo Using compiler: %ISCC%
 echo Driver bundled: drivers\CH341SER.EXE
+echo Python bundled: python\python-3.11.9-amd64.exe
 echo.
 
 :: ── Compile ─────────────────────────────────────────────────────────────────

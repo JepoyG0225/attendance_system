@@ -98,6 +98,12 @@ Source: "post_install.cmd";      DestDir: "{app}\windows"; Flags: ignoreversion
 ; Bundled into {app}\drivers so the user can re-run it later if needed.
 Source: "drivers\CH341SER.EXE";  DestDir: "{app}\drivers"; Flags: ignoreversion
 
+; Python runtime — bundled so school PCs don't need a pre-existing Python.
+; Auto-downloaded to installer/python/ during build (see build_installer.bat).
+; Extracted to {tmp} only when needed, then runs silently. Doesn't ship into
+; {app} because once installed it lives in Program Files\Python311 system-wide.
+Source: "python\python-3.11.9-amd64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: NeedsPython
+
 [Icons]
 ; Start Menu (always)
 Name: "{group}\Attendance System";        Filename: "{app}\windows\run_app.bat";    WorkingDir: "{app}"; IconFilename: "{app}\static\app-icon.ico"; Comment: "Open the Attendance System (native app)"
@@ -116,12 +122,25 @@ Name: "{app}\static\photos"; Permissions: users-modify
 Name: "{localappdata}\AttendanceSystem"
 
 [Run]
-; ── 0. CH340 USB-serial driver (required for SIM800L GSM modems) ─────────────
-;     Runs WCH's official installer in silent mode (/S). It's idempotent —
-;     if the driver is already installed, the installer just exits cleanly.
-;     We don't abort the install on driver-install failure (the rest of the
-;     app still works, you just can't talk to a CH340-based modem until you
-;     install the driver manually).
+; ── 0a. Python 3.11 (only when not already present at version ≥ 3.11) ────────
+;       Bundled python-3.11.9-amd64.exe runs silently:
+;         /quiet            no UI
+;         InstallAllUsers=1 system-wide install in Program Files\Python311
+;         PrependPath=1     adds python.exe and the py launcher to PATH
+;         Include_test=0    skip the test suite (~50 MB saved)
+;         Include_launcher=1 the py launcher (`py -3`) post_install.cmd uses
+Filename: "{tmp}\python-3.11.9-amd64.exe"; \
+    Parameters: "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_launcher=1"; \
+    StatusMsg: "Installing Python 3.11 (this may take a few minutes)..."; \
+    Flags: waituntilterminated; \
+    Check: NeedsPython
+
+; ── 0b. CH340 USB-serial driver (required for SIM800L GSM modems) ─────────────
+;       Runs WCH's official installer in silent mode (/S). It's idempotent —
+;       if the driver is already installed, the installer just exits cleanly.
+;       We don't abort the install on driver-install failure (the rest of the
+;       app still works, you just can't talk to a CH340-based modem until you
+;       install the driver manually).
 Filename: "{app}\drivers\CH341SER.EXE"; Parameters: "/S"; \
     StatusMsg: "Installing CH340 USB-serial driver (for GSM modems)..."; \
     Flags: runhidden waituntilterminated skipifdoesntexist
@@ -243,30 +262,27 @@ begin
   DeleteFile(TmpFile);
 end;
 
-{ Called by Inno Setup before the wizard appears. }
+{ Called by Inno Setup before the wizard appears.
+
+  Old behaviour: aborted setup if Python wasn't installed.
+  New behaviour: just detect — if Python is missing or too old, we'll silently
+  install the bundled python-3.11.9-amd64.exe during the [Run] phase. Result
+  is always True so the wizard proceeds. }
 function InitializeSetup(): Boolean;
-var
-  ShellResult: Integer;
 begin
   PythonOk := DetectPython();
-  if not PythonOk then
-  begin
-    if MsgBox(
-      'Python ' + IntToStr(MIN_PY_MAJOR) + '.' + IntToStr(MIN_PY_MINOR) + ' or newer was not found on this PC.' + #13#10 + #13#10 +
-      'The Attendance System needs Python to run. You can:' + #13#10 +
-      '  - Click YES to open the Python download page in your browser, then re-run this installer.' + #13#10 +
-      '  - Click NO to cancel.',
-      mbError, MB_YESNO or MB_DEFBUTTON1) = IDYES then
-    begin
-      ShellExec('open', 'https://www.python.org/downloads/windows/', '', '', SW_SHOW, ewNoWait, ShellResult);
-    end;
-    Result := False;
-    Exit;
-  end;
   Result := True;
 end;
 
-{ Show detected Python version on the Ready page. }
+{ Used as a Check: on the bundled Python [Files] and [Run] entries.
+  Returns True when the system needs Python installed (missing or too old). }
+function NeedsPython(): Boolean;
+begin
+  Result := not PythonOk;
+end;
+
+{ Show detected Python version on the Ready page. If Python is missing/too
+  old, show that the bundled Python 3.11.9 will be installed automatically. }
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
                          MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo,
                          MemoTasksInfo: String): String;
@@ -274,8 +290,10 @@ var
   S: String;
 begin
   S := '';
-  if PythonVersion <> '' then
-    S := S + 'Detected Python:' + NewLine + Space + PythonVersion + NewLine + NewLine;
+  if PythonOk then
+    S := S + 'Detected Python:' + NewLine + Space + PythonVersion + NewLine + NewLine
+  else
+    S := S + 'Python not found — will install Python 3.11.9 (bundled).' + NewLine + NewLine;
   S := S + MemoDirInfo + NewLine + NewLine;
   if MemoTasksInfo <> '' then
     S := S + 'Options:' + NewLine + MemoTasksInfo + NewLine;
