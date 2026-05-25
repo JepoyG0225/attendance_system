@@ -21,4 +21,9 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 :: pythonw.exe = no console window. python.exe would show a black box behind the app.
-start "" ".venv\Scripts\pythonw.exe" "app.py"
+:: Redirect stderr/stdout to app.log so we can debug launch failures after the
+:: fact (otherwise pythonw silently swallows tracebacks).
+:: The timestamp marker makes it easy to spot the most recent launch.
+echo. >> "%LOG_FILE%"
+echo === Launch %DATE% %TIME% === >> "%LOG_FILE%"
+start "" /B ".venv\Scripts\pythonw.exe" "app.py" >> "%LOG_FILE%" 2>&1

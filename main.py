@@ -19,6 +19,14 @@ from typing import Optional
 import asyncio
 import json
 
+# ── Make the app location-independent ─────────────────────────────────────────
+# Every FileResponse / StaticFiles / DB path below is RELATIVE to this script's
+# directory. Without this chdir, launching the app from another cwd (start-menu
+# shortcut, double-clicking app.py, schtasks, etc.) causes "static/index.html
+# does not exist" errors when the dashboard loads.
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(APP_DIR)
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, StreamingResponse
