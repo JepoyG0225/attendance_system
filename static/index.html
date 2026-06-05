@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Attendance Admin</title>
+  <link rel="icon" type="image/png" href="/static/app-icon.png" />
   <link href="/static/fonts/montserrat.css" rel="stylesheet" />
   <style>
     /* ── Reset & tokens ─────────────────────────────────────────────────── */
@@ -868,6 +869,7 @@
             <select class="select" id="student-section-filter" onchange="filterStudents()">
               <option value="">All sections</option>
             </select>
+            <button class="btn btn-outline" onclick="openBulkPhotoModal()">🖼 Bulk Photos</button>
             <button class="btn btn-outline" onclick="openCsvImportModal()">⬆ Import CSV</button>
             <button class="btn btn-primary" onclick="openRegisterModal()">＋ Register</button>
           </div>
@@ -1357,6 +1359,33 @@
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeCsvModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Photo Upload -->
+<div class="modal-overlay" id="bulk-photo-modal">
+  <div class="modal modal-xl">
+    <h3>Bulk upload student photos</h3>
+    <p class="modal-subtitle">
+      Pick multiple image files. Each file is auto-assigned to a student by parsing the filename for
+      name tokens. Examples — <code>gealon_jeffrey.jpg</code>, <code>jeffrey gealon.png</code>, and
+      <code>santos-maria-l.jpg</code> all match by token. Order of names doesn't matter; middle
+      initials are ignored.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <input type="file" id="bulk-photo-files" accept="image/*" multiple class="input" style="flex:1;min-width:240px" />
+      <button class="btn btn-success" onclick="uploadBulkPhotos()" id="bulk-photo-upload-btn">Upload &amp; Assign</button>
+    </div>
+    <div id="bulk-photo-summary" style="display:none;font-size:.85rem;margin-bottom:10px"></div>
+    <div class="table-wrap" style="max-height:380px;overflow-y:auto">
+      <table id="bulk-photo-table" style="font-size:.8rem">
+        <thead><tr><th>File</th><th>Result</th><th>Student</th><th>Notes</th></tr></thead>
+        <tbody id="bulk-photo-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeBulkPhotoModal()">Close</button>
     </div>
   </div>
 </div>
@@ -2200,6 +2229,108 @@ async function commitCsvImport() {
       toast(data.detail || "Import failed");
     }
   } catch (e) { toast("Could not import"); }
+}
+
+// ── Bulk Photo Upload ────────────────────────────────────────────────────────
+function openBulkPhotoModal() {
+  document.getElementById("bulk-photo-files").value = "";
+  document.getElementById("bulk-photo-tbody").innerHTML = "";
+  document.getElementById("bulk-photo-summary").style.display = "none";
+  document.getElementById("bulk-photo-upload-btn").disabled = false;
+  document.getElementById("bulk-photo-modal").classList.add("open");
+}
+function closeBulkPhotoModal() {
+  document.getElementById("bulk-photo-modal").classList.remove("open");
+}
+
+async function uploadBulkPhotos() {
+  const input = document.getElementById("bulk-photo-files");
+  const files = Array.from(input.files || []);
+  if (!files.length) { toast("Pick one or more image files first"); return; }
+
+  const btn = document.getElementById("bulk-photo-upload-btn");
+  btn.disabled = true;
+  btn.textContent = `Uploading ${files.length}…`;
+
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+
+  try {
+    const r = await fetch(`${API}/students/photos/bulk`, { method: "POST", body: fd });
+    const data = await r.json();
+    if (!r.ok) {
+      toast(data.detail || "Bulk upload failed");
+      return;
+    }
+    renderBulkPhotoResults(data);
+    const s = data.summary;
+    toast(`Matched ${s.matched}/${s.total} — ${s.unmatched} unmatched, ${s.ambiguous} ambiguous, ${s.errors} errors`);
+    if (s.matched > 0) loadStudents();  // refresh the table so new avatars show
+  } catch (e) {
+    toast("Could not reach server");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Upload & Assign";
+  }
+}
+
+function renderBulkPhotoResults(data) {
+  const tbody   = document.getElementById("bulk-photo-tbody");
+  const summary = document.getElementById("bulk-photo-summary");
+  const s       = data.summary;
+
+  summary.style.display = "block";
+  summary.innerHTML = `
+    Total: <strong>${s.total}</strong>
+    · <span style="color:var(--green)">Matched ${s.matched}</span>
+    · <span style="color:var(--text-3)">Unmatched ${s.unmatched}</span>
+    · <span style="color:var(--yellow)">Ambiguous ${s.ambiguous}</span>
+    · <span style="color:var(--red)">Errors ${s.errors}</span>`;
+
+  const rows = [];
+  // Matched (with thumbnail) — cache-bust the image src so the new photo shows
+  // immediately even if the browser already cached the old one.
+  const cb = "?_=" + Date.now();
+  for (const m of data.matched) {
+    rows.push(`<tr>
+      <td><code>${m.filename}</code></td>
+      <td><span class="chip chip-present">MATCHED</span></td>
+      <td style="display:flex;align-items:center;gap:8px">
+        <img src="${m.photo_url}${cb}" alt="" style="width:32px;height:32px;border-radius:6px;object-fit:cover;border:1px solid var(--border)" />
+        <span><strong>${m.student_name}</strong> <span style="color:var(--text-3)">(id=${m.student_id})</span></span>
+      </td>
+      <td style="color:var(--text-3)">Saved as <code>/static/photos/${m.student_id}.jpg</code></td>
+    </tr>`);
+  }
+  // Ambiguous
+  for (const a of data.ambiguous) {
+    const cands = (a.candidates || []).map(c => `${c.name} (id=${c.id})`).join(", ");
+    rows.push(`<tr style="background:rgba(255,214,0,.05)">
+      <td><code>${a.filename}</code></td>
+      <td><span class="chip chip-late">AMBIGUOUS</span></td>
+      <td>${cands}</td>
+      <td style="color:var(--text-3)">${a.reason}. Upload manually via the row's Edit button.</td>
+    </tr>`);
+  }
+  // Unmatched
+  for (const u of data.unmatched) {
+    rows.push(`<tr style="background:rgba(255,255,255,.02)">
+      <td><code>${u.filename}</code></td>
+      <td><span class="chip chip-absent">NO MATCH</span></td>
+      <td style="color:var(--text-3)">—</td>
+      <td style="color:var(--text-3)">${u.reason}</td>
+    </tr>`);
+  }
+  // Errors
+  for (const er of data.errors) {
+    rows.push(`<tr style="background:var(--red-soft)">
+      <td><code>${er.filename}</code></td>
+      <td><span class="chip chip-absent">ERROR</span></td>
+      <td>—</td>
+      <td style="color:var(--red)">${er.reason}</td>
+    </tr>`);
+  }
+  tbody.innerHTML = rows.join("") || `<tr><td colspan="4" class="empty">No results</td></tr>`;
 }
 
 // ── CLASSES (Grades + Sections) ───────────────────────────────────────────────

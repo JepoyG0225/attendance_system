@@ -426,6 +426,127 @@ async def upload_photo(
     return _student_out(s)
 
 
+# ── Bulk photo upload ─────────────────────────────────────────────────────────
+
+_ALLOWED_PHOTO_EXT = {"jpg", "jpeg", "png", "webp"}
+
+
+def _photo_name_tokens(text: str) -> set[str]:
+    """
+    Tokenize a name (filename stem or student full_name) into a set of
+    lowercase alphanumeric tokens, dropping anything shorter than 2 chars
+    (middle initials, stray separators).
+
+    Examples:
+      "gealon_jeffrey"     -> {"gealon", "jeffrey"}
+      "Jeffrey M. Gealon"  -> {"jeffrey", "gealon"}
+      "santos-maria-l"     -> {"santos", "maria"}
+    """
+    return {t for t in re.split(r"[^a-z0-9]+", text.lower()) if len(t) >= 2}
+
+
+@app.post("/students/photos/bulk", tags=["Students"])
+async def bulk_upload_photos(
+    files: list[UploadFile] = File(..., description="Photos to auto-assign to students"),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload many student photos at once. Each file is matched to a student
+    by the name tokens parsed from its filename.
+
+    Matching rules (case-insensitive, ignores extensions + non-alphanumeric
+    separators like _ - . space):
+
+      - `gealon_jeffrey.jpg`   matches "Jeffrey Gealon" (any order works)
+      - `jeffrey gealon.png`   also matches
+      - `santos-maria-l.jpg`   matches "Maria L Santos" (middle initial OK)
+
+    A file matches only when ALL of its name tokens appear in a single
+    student's full_name. If multiple students match (e.g. two students named
+    "Maria Santos"), the file is reported as **ambiguous** and skipped —
+    you'll need to upload those one-by-one via the single-photo endpoint.
+
+    Returns a per-file outcome so the dashboard can show which photos landed
+    and which need manual attention.
+    """
+    students = db.query(Student).filter(Student.is_active == True).all()
+    # Pre-compute each student's normalized token set so we don't redo it per file.
+    student_tokens = [(s, _photo_name_tokens(s.full_name)) for s in students]
+
+    matched:   list[dict] = []
+    unmatched: list[dict] = []
+    ambiguous: list[dict] = []
+    errors:    list[dict] = []
+
+    for f in files:
+        filename = f.filename or ""
+        if not filename:
+            errors.append({"filename": "(empty)", "reason": "missing filename"})
+            continue
+
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in _ALLOWED_PHOTO_EXT:
+            errors.append({"filename": filename, "reason": f"unsupported extension '.{ext}'"})
+            continue
+
+        stem = filename.rsplit(".", 1)[0]
+        file_tokens = _photo_name_tokens(stem)
+        if not file_tokens:
+            unmatched.append({"filename": filename, "reason": "no usable name tokens in filename"})
+            continue
+
+        # Find every student whose name contains ALL of the file's tokens.
+        candidates = [s for s, toks in student_tokens if file_tokens.issubset(toks)]
+
+        if not candidates:
+            unmatched.append({
+                "filename": filename,
+                "reason": f"no student matched tokens {sorted(file_tokens)}",
+            })
+            continue
+
+        if len(candidates) > 1:
+            ambiguous.append({
+                "filename": filename,
+                "reason": f"matches {len(candidates)} students",
+                "candidates": [{"id": s.id, "name": s.full_name} for s in candidates[:6]],
+            })
+            continue
+
+        # Single match — save the photo and update the student row.
+        student = candidates[0]
+        try:
+            photo_path = f"static/photos/{student.id}.jpg"
+            with open(photo_path, "wb") as out:
+                shutil.copyfileobj(f.file, out)
+            student.photo_path = f"/static/photos/{student.id}.jpg"
+            db.commit()
+            matched.append({
+                "filename":     filename,
+                "student_id":   student.id,
+                "student_name": student.full_name,
+                "photo_url":    student.photo_path,
+            })
+            logger.info(f"[Bulk Photo] {filename} -> {student.full_name} (id={student.id})")
+        except Exception as e:
+            db.rollback()
+            errors.append({"filename": filename, "reason": f"save failed: {e}"})
+
+    return {
+        "summary": {
+            "total":     len(files),
+            "matched":   len(matched),
+            "unmatched": len(unmatched),
+            "ambiguous": len(ambiguous),
+            "errors":    len(errors),
+        },
+        "matched":   matched,
+        "unmatched": unmatched,
+        "ambiguous": ambiguous,
+        "errors":    errors,
+    }
+
+
 @app.post("/students/promote", tags=["Students"])
 def promote_students(
     from_section_id: int,

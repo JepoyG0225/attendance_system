@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Scanner</title>
+  <link rel="icon" type="image/png" href="/static/app-icon.png" />
   <link href="/static/fonts/montserrat.css" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,14 +26,14 @@
     }
 
     /* ── Header bar ─────────────────────────────────────────────────────── */
-    /* Big top padding so the school name + clock clear the Pi case bezel on
-       7" displays (typically 12-20mm of physical bezel). env(safe-area-inset-*)
-       fallback for cases that report a notch — Pi cases don't, but free insurance. */
+    /* Big top padding so the badge + clock clear the Pi case bezel on 7"
+       displays (typically 12-25mm of physical bezel — generous default for
+       worst-case cases). env(safe-area-inset-*) fallback if the OS reports one. */
     #header {
       position: fixed; top: 0; left: 0; right: 0;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 60px 28px 14px 28px;
-      padding-top: max(60px, env(safe-area-inset-top, 60px));
+      padding: 125px 28px 14px 28px;
+      padding-top: max(125px, env(safe-area-inset-top, 125px));
       background: rgba(10,14,26,0.85);
       backdrop-filter: blur(8px);
       border-bottom: 1px solid rgba(255,255,255,.08);
@@ -56,11 +57,11 @@
     #clock-time { font-size: 1.4rem; font-weight: 700; letter-spacing: .04em; color: #fff; }
 
     /* ── Main stage ─────────────────────────────────────────────────────── */
-    /* padding-top accounts for the taller header above (~120px now). */
+    /* padding-top accounts for the taller header above (~160px now). */
     #stage {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
-      padding-top: 120px;
+      padding-top: 190px;
       padding-bottom: 40px;
     }
 
@@ -100,11 +101,10 @@
       box-shadow: 0 0 60px rgba(41,121,255,.18), 0 0 120px rgba(41,121,255,.08);
     }
     .logo-circle img {
-      /* `contain` shows the whole logo without cropping or distortion.
-         Slight inset so the round school crest doesn't visually touch the
-         circular wave border. */
-      width: 88%; height: 88%;
-      object-fit: contain;
+      /* `cover` fills the circle edge-to-edge so the round school crest
+         visually matches the circular wave border. */
+      width: 100%; height: 100%;
+      object-fit: cover;
     }
 
     #idle-school {
@@ -274,8 +274,8 @@
        visual "squish"). Compresses everything so the whole UI fits in ~520px
        of usable height after the case bezel takes its 60-100px bite. */
     @media (max-height: 700px) {
-      #header { padding-top: 24px; padding-bottom: 10px; }
-      #stage { padding-top: 80px; padding-bottom: 16px; }
+      #header { padding-top: 70px; padding-bottom: 10px; }
+      #stage { padding-top: 128px; padding-bottom: 16px; }
       .logo-circle, .logo-circle-wrapper { width: 150px; height: 150px; }
       .logo-circle { box-shadow: 0 0 40px rgba(41,121,255,.18); }
       #idle { gap: 14px; }
