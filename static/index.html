@@ -661,6 +661,9 @@
     <button class="nav-item" data-page="students" onclick="switchPage('students')">
       <span class="icon">👥</span> <span>Students</span>
     </button>
+    <button class="nav-item" data-page="teachers" onclick="switchPage('teachers')">
+      <span class="icon">👨‍🏫</span> <span>Teachers</span>
+    </button>
     <button class="nav-item" data-page="classes" onclick="switchPage('classes')">
       <span class="icon">🏫</span> <span>Grades &amp; Sections</span>
     </button>
@@ -888,6 +891,57 @@
                 </tr>
               </thead>
               <tbody id="student-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: TEACHERS
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-teachers">
+        <div class="card">
+          <div class="toolbar">
+            <input type="text" class="input input-search" id="teacher-search" placeholder="Search by name, RFID, or department..." oninput="filterTeachers()" style="flex:1;min-width:240px" />
+            <button class="btn btn-primary" onclick="openRegisterTeacherModal()">＋ Register Teacher</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Phone</th>
+                  <th>RFID UID</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px">
+          <div class="card-head">
+            <h3>Teacher Attendance — Today</h3>
+            <input type="date" class="input" id="teacher-att-date" onchange="loadTeacherAttendance()" style="max-width:200px" />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>AM In</th>
+                  <th>AM Out</th>
+                  <th>PM In</th>
+                  <th>PM Out</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-att-tbody"></tbody>
             </table>
           </div>
         </div>
@@ -1363,6 +1417,35 @@
   </div>
 </div>
 
+<!-- Register / Edit Teacher -->
+<div class="modal-overlay" id="teacher-modal">
+  <div class="modal">
+    <h3 id="teacher-modal-title">Register Teacher</h3>
+    <p class="modal-subtitle">Add a faculty or staff member. Their RFID card unlocks teacher attendance.</p>
+    <input type="hidden" id="teacher-edit-id" />
+    <div class="form-row">
+      <label>Full Name</label>
+      <input type="text" class="input" id="teacher-form-name" placeholder="e.g. Maria L. Santos" />
+    </div>
+    <div class="form-row">
+      <label>Department <span class="hint">(optional)</span></label>
+      <input type="text" class="input" id="teacher-form-dept" placeholder="e.g. Mathematics" />
+    </div>
+    <div class="form-row">
+      <label>Phone <span class="hint">(optional, PH mobile)</span></label>
+      <input type="text" class="input" id="teacher-form-phone" placeholder="09171234567" />
+    </div>
+    <div class="form-row">
+      <label>RFID UID</label>
+      <input type="text" class="input" id="teacher-form-rfid" placeholder="Scan card or type UID" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeTeacherModal()">Cancel</button>
+      <button class="btn btn-success" onclick="saveTeacher()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Bulk Photo Upload -->
 <div class="modal-overlay" id="bulk-photo-modal">
   <div class="modal modal-xl">
@@ -1416,6 +1499,8 @@ const API = "";   // same origin
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let allStudents = [];
+let allTeachers = [];
+let teacherAttRecords = [];
 let allGrades   = [];
 let allSections = [];
 let attRecords  = [];
@@ -1427,6 +1512,7 @@ const PAGE_META = {
   dashboard:  { title: "Dashboard",        sub: "Today's attendance at a glance" },
   attendance: { title: "Attendance",       sub: "View and edit attendance records" },
   students:   { title: "Students",         sub: "Enrolled student directory" },
+  teachers:   { title: "Teachers",         sub: "Faculty + staff RFID + attendance" },
   classes:    { title: "Grades & Sections",sub: "Manage classes and promotions" },
   reports:    { title: "Reports",          sub: "Monthly attendance summaries" },
   calendar:   { title: "Calendar",         sub: "Holidays and non-school days" },
@@ -1449,6 +1535,7 @@ function switchPage(name) {
   if (name === "dashboard")  loadDashboard();
   if (name === "attendance") loadAttendance();
   if (name === "students")   loadStudents();
+  if (name === "teachers")   { loadTeachers(); loadTeacherAttendance(); }
   if (name === "classes")    { loadGrades(); populatePromoteSections(); }
   if (name === "reports")    initReports();
   if (name === "calendar")   loadHolidays();
@@ -1490,28 +1577,35 @@ function _setLiveIndicator(online) {
 }
 
 function _handleScanEvent(data) {
-  // data shape mirrors ScanResponse — {success, student, attendance, action, ...}
-  const s   = data.student   || {};
-  const att = data.attendance || {};
+  // data shape mirrors ScanResponse — student OR teacher branch depending on `kind`.
+  const isTeacher = data.kind === "teacher";
+  const person    = isTeacher ? (data.teacher || {})            : (data.student    || {});
+  const att       = isTeacher ? (data.teacher_attendance || {}) : (data.attendance || {});
   const actionMap = {
     am_in:  "morning in",   am_out: "morning out",
     pm_in:  "afternoon in", pm_out: "afternoon out",
   };
   const actionLabel = actionMap[data.action] || data.action || "scan";
-  const name = s.full_name || "Someone";
-  toast(`${name} — ${actionLabel}`);
+  const name = person.full_name || "Someone";
+  const prefix = isTeacher ? "👨‍🏫 " : "";
+  toast(`${prefix}${name} — ${actionLabel}`);
 
   // Refresh only what's currently visible — cheap and avoids surprise reloads.
   const page = _activePageId();
   if (page === "dashboard")  loadDashboard();
-  if (page === "attendance") {
-    // Only reload if the attendance page is viewing today's date (the scan's date).
+  if (page === "attendance" && !isTeacher) {
     const picker = document.getElementById("att-date");
     if (!picker || !picker.value || picker.value === (att.date || todayISO())) {
       loadAttendance();
     }
   }
-  if (page === "sms")        loadSmsLogs();
+  if (page === "teachers" && isTeacher) {
+    const picker = document.getElementById("teacher-att-date");
+    if (!picker || !picker.value || picker.value === (att.date || todayISO())) {
+      loadTeacherAttendance();
+    }
+  }
+  if (page === "sms" && !isTeacher) loadSmsLogs();
 }
 
 function connectLiveEvents() {
@@ -2331,6 +2425,145 @@ function renderBulkPhotoResults(data) {
     </tr>`);
   }
   tbody.innerHTML = rows.join("") || `<tr><td colspan="4" class="empty">No results</td></tr>`;
+}
+
+// ── TEACHERS ──────────────────────────────────────────────────────────────────
+async function loadTeachers() {
+  try {
+    allTeachers = await fetch(`${API}/teachers?active_only=true`).then(r => r.json());
+    filterTeachers();
+  } catch (e) {
+    document.getElementById("teacher-tbody").innerHTML =
+      `<tr><td colspan="6" class="empty">Could not load teachers.</td></tr>`;
+  }
+}
+
+function filterTeachers() {
+  const q = (document.getElementById("teacher-search").value || "").toLowerCase();
+  const rows = q
+    ? allTeachers.filter(t =>
+        (t.full_name || "").toLowerCase().includes(q) ||
+        (t.department || "").toLowerCase().includes(q) ||
+        (t.rfid_uid  || "").toLowerCase().includes(q))
+    : allTeachers;
+  const tbody = document.getElementById("teacher-tbody");
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty"><div class="empty-icon">👨‍🏫</div>No teachers registered yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(t => `
+    <tr>
+      <td>${avatar(t)}</td>
+      <td><strong>${t.full_name}</strong></td>
+      <td>${t.department || "—"}</td>
+      <td>${t.phone || "—"}</td>
+      <td><code>${t.rfid_uid}</code></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" onclick="openEditTeacherModal(${t.id})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTeacher(${t.id},'${(t.full_name||'').replace(/'/g,"\\'")}')">Remove</button>
+      </td>
+    </tr>`).join("");
+}
+
+function openRegisterTeacherModal() {
+  document.getElementById("teacher-modal-title").textContent = "Register Teacher";
+  document.getElementById("teacher-edit-id").value    = "";
+  document.getElementById("teacher-form-name").value  = "";
+  document.getElementById("teacher-form-dept").value  = "";
+  document.getElementById("teacher-form-phone").value = "";
+  document.getElementById("teacher-form-rfid").value  = "";
+  document.getElementById("teacher-modal").classList.add("open");
+  setTimeout(() => document.getElementById("teacher-form-name").focus(), 50);
+}
+
+function openEditTeacherModal(id) {
+  const t = allTeachers.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById("teacher-modal-title").textContent = "Edit Teacher";
+  document.getElementById("teacher-edit-id").value    = String(id);
+  document.getElementById("teacher-form-name").value  = t.full_name || "";
+  document.getElementById("teacher-form-dept").value  = t.department || "";
+  document.getElementById("teacher-form-phone").value = t.phone || "";
+  document.getElementById("teacher-form-rfid").value  = t.rfid_uid || "";
+  document.getElementById("teacher-modal").classList.add("open");
+}
+
+function closeTeacherModal() {
+  document.getElementById("teacher-modal").classList.remove("open");
+}
+
+async function saveTeacher() {
+  const id    = document.getElementById("teacher-edit-id").value.trim();
+  const body  = {
+    full_name:  document.getElementById("teacher-form-name").value.trim(),
+    department: document.getElementById("teacher-form-dept").value.trim() || null,
+    phone:      document.getElementById("teacher-form-phone").value.trim() || null,
+    rfid_uid:   document.getElementById("teacher-form-rfid").value.trim().toUpperCase(),
+  };
+  if (!body.full_name || !body.rfid_uid) {
+    toast("Name and RFID are required"); return;
+  }
+  const url    = id ? `${API}/teachers/${id}` : `${API}/teachers`;
+  const method = id ? "PATCH" : "POST";
+  try {
+    const r = await fetch(url, {
+      method, headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) {
+      toast(id ? "Teacher updated" : "Teacher registered");
+      closeTeacherModal();
+      loadTeachers();
+    } else {
+      const data = await r.json();
+      toast(data.detail || "Save failed");
+    }
+  } catch (e) { toast("Could not reach server"); }
+}
+
+function deleteTeacher(id, name) {
+  confirmAction(
+    "Remove teacher",
+    `Deactivate <strong>${name}</strong>? Attendance history is kept; they just won't appear on scanners.`,
+    async () => {
+      const r = await fetch(`${API}/teachers/${id}`, { method: "DELETE" });
+      if (r.ok) { toast(`${name} deactivated`); loadTeachers(); }
+      else { toast("Could not deactivate"); }
+    }
+  );
+}
+
+// ── Teacher Attendance ───────────────────────────────────────────────────────
+async function loadTeacherAttendance() {
+  const el = document.getElementById("teacher-att-date");
+  if (!el.value) el.value = todayISO();
+  const d = el.value;
+  try {
+    teacherAttRecords = await fetch(`${API}/teacher-attendance?target_date=${d}`).then(r => r.json());
+    renderTeacherAttendance(teacherAttRecords);
+  } catch (e) {
+    document.getElementById("teacher-att-tbody").innerHTML =
+      `<tr><td colspan="8" class="empty">Could not load.</td></tr>`;
+  }
+}
+
+function renderTeacherAttendance(records) {
+  const tbody = document.getElementById("teacher-att-tbody");
+  if (!records.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty"><div class="empty-icon">📅</div>No teacher attendance for this date.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td><strong>${r.teacher_name || ""}</strong></td>
+      <td>${r.department || "—"}</td>
+      <td>${fmtTime(r.am_time_in)}</td>
+      <td>${fmtTime(r.am_time_out)}</td>
+      <td>${fmtTime(r.pm_time_in)}</td>
+      <td>${fmtTime(r.pm_time_out)}</td>
+      <td>${chip(r.status)}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.notes || ""}</td>
+    </tr>`).join("");
 }
 
 // ── CLASSES (Grades + Sections) ───────────────────────────────────────────────

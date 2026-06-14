@@ -137,6 +137,46 @@ class Holiday(Base):
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
 
 
+# ── Teacher ────────────────────────────────────────────────────────────────────
+
+class Teacher(Base):
+    __tablename__ = "teachers"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    rfid_uid     = Column(String(50), unique=True, index=True, nullable=False)
+    full_name    = Column(String(100), nullable=False)
+    department   = Column(String(80),  nullable=True)   # e.g. "Mathematics", "Admin"
+    phone        = Column(String(20),  nullable=True)
+    is_active    = Column(Boolean, default=True)
+    photo_path   = Column(String(255), nullable=True)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+
+    attendances  = relationship("TeacherAttendance", back_populates="teacher")
+
+    def __repr__(self):
+        return f"<Teacher {self.full_name} | RFID: {self.rfid_uid}>"
+
+
+class TeacherAttendance(Base):
+    """Same shape as Attendance — separate table so student/teacher analytics
+    don't tangle, and so we can evolve teacher policy independently (no SMS,
+    different absent windows, etc.)."""
+    __tablename__ = "teacher_attendance"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    teacher_id  = Column(Integer, ForeignKey("teachers.id"), nullable=False)
+    date        = Column(Date, nullable=False, index=True)
+    am_time_in  = Column(Time, nullable=True)
+    am_time_out = Column(Time, nullable=True)
+    pm_time_in  = Column(Time, nullable=True)
+    pm_time_out = Column(Time, nullable=True)
+    status      = Column(Enum(AttendanceStatus), default=AttendanceStatus.present)
+    notes       = Column(Text, nullable=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+    teacher     = relationship("Teacher", back_populates="attendances")
+
+
 # ── Scanner Heartbeat ──────────────────────────────────────────────────────────
 
 class ScannerHeartbeat(Base):

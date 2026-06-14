@@ -23,7 +23,10 @@
       background: #0a0e1a;
       color: #fff;
       user-select: none;
+      /* Kiosk: hide the mouse cursor everywhere on the page */
+      cursor: none;
     }
+    *, *::before, *::after { cursor: none !important; }
 
     /* ── Header bar ─────────────────────────────────────────────────────── */
     /* Big top padding so the badge + clock clear the Pi case bezel on 7"
@@ -599,11 +602,14 @@ async function submitScan(uid) {
   $rfid.focus();
 }
 
-// ── Show student result ───────────────────────────────────────────────────────
+// ── Show student/teacher result ───────────────────────────────────────────────
 function showStudent(data) {
-  const s   = data.student;
-  const att = data.attendance;
-  const action = data.action; // "time_in" | "time_out" | "already_complete"
+  // Unified renderer for both students and teachers. /scan returns either
+  // {kind:"student", student, attendance} or {kind:"teacher", teacher, teacher_attendance}.
+  const isTeacher = data.kind === 'teacher';
+  const s   = isTeacher ? data.teacher : data.student;
+  const att = isTeacher ? data.teacher_attendance : data.attendance;
+  const action = data.action;
 
   // Photo or initials
   const photoEl    = document.getElementById('student-photo');
@@ -622,9 +628,15 @@ function showStudent(data) {
     initialsEl.textContent = s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   }
 
-  // Grade badge
-  const gradeSec = [s.grade, s.section].filter(Boolean).join(' — ');
-  document.getElementById('student-grade-badge').textContent = gradeSec || 'No section';
+  // Sub-badge: grade/section for students, "TEACHER · Department" for teachers
+  const badge = document.getElementById('student-grade-badge');
+  if (isTeacher) {
+    const dept = s.department || '';
+    badge.textContent = dept ? `TEACHER · ${dept}` : 'TEACHER';
+  } else {
+    const gradeSec = [s.grade, s.section].filter(Boolean).join(' — ');
+    badge.textContent = gradeSec || 'No section';
+  }
 
   // Name
   document.getElementById('student-name').textContent = s.full_name;
@@ -661,11 +673,16 @@ function showStudent(data) {
   const timeLabels = { am_in: 'MORNING ARRIVAL', am_out: 'MORNING DISMISSAL', pm_in: 'AFTERNOON ARRIVAL', pm_out: 'AFTERNOON DISMISSAL' };
   document.getElementById('time-label').textContent = timeLabels[action] || 'RECORDED';
 
-  // SMS
-  document.getElementById('sms-icon').textContent = data.sms_sent ? '📱' : '📵';
-  document.getElementById('sms-text').textContent = data.sms_sent
-    ? 'SMS queued/sent'
-    : 'SMS not sent';
+  // SMS row — teachers don't have parents, so suppress entirely for them
+  if (isTeacher) {
+    document.getElementById('sms-icon').textContent = '';
+    document.getElementById('sms-text').textContent = '';
+  } else {
+    document.getElementById('sms-icon').textContent = data.sms_sent ? '📱' : '📵';
+    document.getElementById('sms-text').textContent = data.sms_sent
+      ? 'SMS queued/sent'
+      : 'SMS not sent';
+  }
 
   showScreen('result');
   scheduleReset();

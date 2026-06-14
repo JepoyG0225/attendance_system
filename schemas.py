@@ -96,6 +96,74 @@ class StudentUpdate(BaseModel):
         return v
 
 
+# ── Teacher ───────────────────────────────────────────────────────────────────
+
+class TeacherCreate(BaseModel):
+    rfid_uid:   str
+    full_name:  str
+    department: Optional[str] = None
+    phone:      Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_teacher_phone(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return v
+        v = v.strip().replace(" ", "").replace("-", "")
+        if v.startswith("09") and len(v) == 11:
+            v = "+63" + v[1:]
+        if not re.match(r"^\+639\d{9}$", v):
+            raise ValueError("Invalid PH mobile. Use 09XXXXXXXXX or +639XXXXXXXXX")
+        return v
+
+
+class TeacherOut(BaseModel):
+    id:         int
+    rfid_uid:   str
+    full_name:  str
+    department: Optional[str] = None
+    phone:      Optional[str] = None
+    is_active:  bool
+    photo_path: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class TeacherUpdate(BaseModel):
+    rfid_uid:   Optional[str]  = None
+    full_name:  Optional[str]  = None
+    department: Optional[str]  = None
+    phone:      Optional[str]  = None
+    is_active:  Optional[bool] = None
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_teacher_phone_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return v
+        v = v.strip().replace(" ", "").replace("-", "")
+        if v.startswith("09") and len(v) == 11:
+            v = "+63" + v[1:]
+        if not re.match(r"^\+639\d{9}$", v):
+            raise ValueError("Invalid PH mobile. Use 09XXXXXXXXX or +639XXXXXXXXX")
+        return v
+
+
+class TeacherAttendanceOut(BaseModel):
+    id:           int
+    teacher_id:   int
+    date:         date
+    am_time_in:   Optional[time]
+    am_time_out:  Optional[time]
+    pm_time_in:   Optional[time]
+    pm_time_out:  Optional[time]
+    status:       AttendanceStatus
+    notes:        Optional[str]
+    teacher_name: Optional[str] = None
+    department:   Optional[str] = None
+    model_config = {"from_attributes": True}
+
+
 # ── Bulk operations ───────────────────────────────────────────────────────────
 
 class BulkPromote(BaseModel):
@@ -217,8 +285,14 @@ class SMSLogOut(BaseModel):
 class ScanResponse(BaseModel):
     success:    bool
     message:    str
+    # One of `student` or `teacher` is populated depending on whose card was
+    # scanned. `kind` discriminates so the scanner UI knows which to render.
+    kind:       Optional[str] = None   # "student" | "teacher"
     student:    Optional[StudentOut] = None
-    attendance: Optional[AttendanceOut] = None
+    teacher:    Optional[TeacherOut] = None
+    # Same — exactly one of these will be set if `kind` is set.
+    attendance:         Optional[AttendanceOut]        = None
+    teacher_attendance: Optional[TeacherAttendanceOut] = None
     sms_sent:   bool = False
     action:     Optional[str] = None   # "am_in"|"am_out"|"pm_in"|"pm_out"|"complete"|"error"
     session:    Optional[str] = None   # "morning" | "afternoon"

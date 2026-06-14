@@ -38,6 +38,7 @@ from database import (
     init_db, get_db,
     Grade, Section, Student, Attendance, SMSLog,
     Holiday, ScannerHeartbeat,
+    Teacher, TeacherAttendance,
     AttendanceStatus,
 )
 from schemas import (
@@ -49,6 +50,7 @@ from schemas import (
     DailySummary, SMSLogOut,
     HolidayCreate, HolidayOut,
     HeartbeatIn, HeartbeatOut,
+    TeacherCreate, TeacherOut, TeacherUpdate, TeacherAttendanceOut,
 )
 from attendance import process_scan, get_daily_summary, check_absences
 from sms import (
@@ -168,6 +170,19 @@ def _student_out(s: Student) -> StudentOut:
     )
 
 
+def _teacher_out(t: Teacher) -> TeacherOut:
+    return TeacherOut(
+        id=t.id,
+        rfid_uid=t.rfid_uid,
+        full_name=t.full_name,
+        department=t.department,
+        phone=t.phone,
+        is_active=t.is_active,
+        photo_path=t.photo_path,
+        created_at=t.created_at,
+    )
+
+
 # ── Pages ─────────────────────────────────────────────────────────────────────
 
 @app.get("/", include_in_schema=False)
@@ -185,14 +200,18 @@ def scanner_page():
 @app.post("/scan", response_model=ScanResponse, tags=["Scanning"])
 def rfid_scan(payload: RFIDScan, db: Session = Depends(get_db)):
     result = process_scan(payload.rfid_uid, db)
-    student_out = _student_out(result["student"]) if result["student"] else None
+    student_out = _student_out(result.get("student")) if result.get("student") else None
+    teacher_out = _teacher_out(result.get("teacher")) if result.get("teacher") else None
     response = ScanResponse(
         success=result["success"],
         message=result["message"],
+        kind=result.get("kind"),
         student=student_out,
-        attendance=result["attendance"],
-        sms_sent=result["sms_sent"],
-        action=result["action"],
+        teacher=teacher_out,
+        attendance=result.get("attendance"),
+        teacher_attendance=result.get("teacher_attendance"),
+        sms_sent=result.get("sms_sent", False),
+        action=result.get("action"),
         session=result.get("session"),
     )
 
@@ -736,6 +755,151 @@ async def import_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
     db.commit()
     logger.info(f"CSV import: created {created}, skipped {len(rows) - created}")
     return CSVImportResult(created=created, skipped=len(rows) - created, errors=errors)
+
+
+# ── Teachers ──────────────────────────────────────────────────────────────────
+
+@app.get("/teachers", response_model=list[TeacherOut], tags=["Teachers"])
+def list_teachers(active_only: bool = True, db: Session = Depends(get_db)):
+    q = db.query(Teacher)
+    if active_only:
+        q = q.filter(Teacher.is_active == True)
+    return [_teacher_out(t) for t in q.order_by(Teacher.full_name).all()]
+
+
+@app.post("/teachers", response_model=TeacherOut, status_code=201, tags=["Teachers"])
+def register_teacher(data: TeacherCreate, db: Session = Depends(get_db)):
+    rfid = data.rfid_uid.strip().upper()
+    # RFID is unique across BOTH tables (a card belongs to one person)
+    if db.query(Student).filter(Student.rfid_uid == rfid).first():
+        raise HTTPException(400, f"RFID {rfid} is already assigned to a student")
+    if db.query(Teacher).filter(Teacher.rfid_uid == rfid).first():
+        raise HTTPException(400, f"RFID {rfid} is already assigned to a teacher")
+    teacher = Teacher(
+        rfid_uid=rfid,
+        full_name=data.full_name.strip(),
+        department=(data.department or "").strip() or None,
+        phone=data.phone,
+    )
+    db.add(teacher); db.commit(); db.refresh(teacher)
+    logger.info(f"Registered teacher: {teacher.full_name} | RFID: {teacher.rfid_uid}")
+    return _teacher_out(teacher)
+
+
+@app.get("/teachers/{teacher_id}", response_model=TeacherOut, tags=["Teachers"])
+def get_teacher(teacher_id: int, db: Session = Depends(get_db)):
+    t = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not t:
+        raise HTTPException(404, "Teacher not found")
+    return _teacher_out(t)
+
+
+@app.patch("/teachers/{teacher_id}", response_model=TeacherOut, tags=["Teachers"])
+def update_teacher(teacher_id: int, data: TeacherUpdate, db: Session = Depends(get_db)):
+    t = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not t:
+        raise HTTPException(404, "Teacher not found")
+    payload = data.model_dump(exclude_none=True)
+    if "rfid_uid" in payload:
+        payload["rfid_uid"] = payload["rfid_uid"].strip().upper()
+        rfid = payload["rfid_uid"]
+        if db.query(Student).filter(Student.rfid_uid == rfid).first():
+            raise HTTPException(400, f"RFID {rfid} is already assigned to a student")
+        clash = db.query(Teacher).filter(Teacher.rfid_uid == rfid, Teacher.id != teacher_id).first()
+        if clash:
+            raise HTTPException(400, f"RFID {rfid} is already assigned to {clash.full_name}")
+    for k, v in payload.items():
+        setattr(t, k, v)
+    db.commit(); db.refresh(t)
+    return _teacher_out(t)
+
+
+@app.delete("/teachers/{teacher_id}", tags=["Teachers"])
+def deactivate_teacher(teacher_id: int, db: Session = Depends(get_db)):
+    t = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not t:
+        raise HTTPException(404, "Teacher not found")
+    t.is_active = False
+    db.commit()
+    return {"message": f"{t.full_name} deactivated"}
+
+
+@app.post("/teachers/{teacher_id}/photo", response_model=TeacherOut, tags=["Teachers"])
+async def upload_teacher_photo(
+    teacher_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    t = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not t:
+        raise HTTPException(404, "Teacher not found")
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp"):
+        raise HTTPException(400, "Only JPG, PNG, or WEBP photos allowed")
+    # Use a "t" prefix so we never collide with a student photo id
+    photo_path = f"static/photos/t{teacher_id}.jpg"
+    with open(photo_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    t.photo_path = f"/static/photos/t{teacher_id}.jpg"
+    db.commit(); db.refresh(t)
+    return _teacher_out(t)
+
+
+# ── Teacher Attendance ───────────────────────────────────────────────────────
+
+@app.get("/teacher-attendance", response_model=list[TeacherAttendanceOut], tags=["Teachers"])
+def get_teacher_attendance(
+    target_date: Optional[date_type] = None,
+    teacher_id:  Optional[int]       = None,
+    db: Session = Depends(get_db),
+):
+    q = db.query(TeacherAttendance).join(Teacher)
+    if target_date:
+        q = q.filter(TeacherAttendance.date == target_date)
+    if teacher_id:
+        q = q.filter(TeacherAttendance.teacher_id == teacher_id)
+    records = q.order_by(TeacherAttendance.date.desc(),
+                         TeacherAttendance.am_time_in.desc()).all()
+    out = []
+    for r in records:
+        item = TeacherAttendanceOut.model_validate(r)
+        item.teacher_name = r.teacher.full_name if r.teacher else None
+        item.department   = r.teacher.department if r.teacher else None
+        out.append(item)
+    return out
+
+
+@app.delete("/teacher-attendance/{attendance_id}", tags=["Teachers"])
+def delete_teacher_attendance(attendance_id: int, db: Session = Depends(get_db)):
+    r = db.query(TeacherAttendance).filter(TeacherAttendance.id == attendance_id).first()
+    if not r:
+        raise HTTPException(404, "Record not found")
+    db.delete(r); db.commit()
+    return {"message": "Teacher attendance record deleted"}
+
+
+@app.patch("/teacher-attendance/{attendance_id}", response_model=TeacherAttendanceOut, tags=["Teachers"])
+def update_teacher_attendance(
+    attendance_id: int,
+    notes:  Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    r = db.query(TeacherAttendance).filter(TeacherAttendance.id == attendance_id).first()
+    if not r:
+        raise HTTPException(404, "Record not found")
+    if notes is not None:
+        r.notes = notes
+    if status is not None:
+        try:
+            r.status = AttendanceStatus(status)
+        except ValueError:
+            raise HTTPException(400, f"Invalid status: {status}")
+    db.commit(); db.refresh(r)
+    out = TeacherAttendanceOut.model_validate(r)
+    out.teacher_name = r.teacher.full_name if r.teacher else None
+    out.department   = r.teacher.department if r.teacher else None
+    return out
 
 
 # ── Attendance ────────────────────────────────────────────────────────────────

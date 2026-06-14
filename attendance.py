@@ -16,7 +16,10 @@ import logging
 import threading
 from queue import Queue
 
-from database import Student, Attendance, SMSLog, Holiday, AttendanceStatus, SMSStatus, SessionLocal
+from database import (
+    Student, Attendance, SMSLog, Holiday, AttendanceStatus, SMSStatus, SessionLocal,
+    Teacher, TeacherAttendance,
+)
 from sms import send_sms
 from config import (
     SCHOOL_NAME, SCHOOL_TIMEZONE,
@@ -164,30 +167,54 @@ threading.Thread(target=_sms_worker, daemon=True).start()
 
 def process_scan(rfid_uid: str, db: Session) -> dict:
     """
-    Handles RFID scan. Returns a result dict with keys:
-      success, message, student, attendance, sms_sent, action, session
+    Top-level RFID dispatch. Tries the students table first, then teachers,
+    so cards are routed to the right attendance ledger. Returns a result dict
+    with the unified keys:
+      success, message, kind ("student"|"teacher"|None),
+      student, teacher, attendance, teacher_attendance,
+      sms_sent, action, session
     """
-    rfid_uid = rfid_uid.strip().upper()
+    rfid_uid_norm = rfid_uid.strip().upper()
+
+    student = (
+        db.query(Student)
+        .filter(Student.rfid_uid == rfid_uid_norm, Student.is_active == True)
+        .first()
+    )
+    if student:
+        return _process_student_scan(student, db)
+
+    teacher = (
+        db.query(Teacher)
+        .filter(Teacher.rfid_uid == rfid_uid_norm, Teacher.is_active == True)
+        .first()
+    )
+    if teacher:
+        return _process_teacher_scan(teacher, db)
+
+    # No match in either table
+    return {
+        "success":            False,
+        "message":            f"Unknown card: {rfid_uid_norm}. Register this person first.",
+        "kind":               None,
+        "student":            None,
+        "teacher":            None,
+        "attendance":         None,
+        "teacher_attendance": None,
+        "sms_sent":           False,
+        "action":             "error",
+        "session":            None,
+    }
+
+
+def _process_student_scan(student: Student, db: Session) -> dict:
+    """
+    Per-student scan handler. Returns the same result dict shape as
+    process_scan, with kind="student".
+    """
     now = _now()
     today = now.date()
     current_time = now.time().replace(microsecond=0)
-
-    # 1. Look up student
-    student: Optional[Student] = (
-        db.query(Student)
-        .filter(Student.rfid_uid == rfid_uid, Student.is_active == True)
-        .first()
-    )
-    if not student:
-        return {
-            "success":    False,
-            "message":    f"Unknown card: {rfid_uid}. Register this student first.",
-            "student":    None,
-            "attendance": None,
-            "sms_sent":   False,
-            "action":     "error",
-            "session":    None,
-        }
 
     # 2. Get or create today's attendance record
     record: Optional[Attendance] = (
@@ -267,13 +294,16 @@ def process_scan(rfid_uid: str, db: Session) -> dict:
         else:
             db.commit()
             return {
-                "success":    True,
-                "message":    f"{student.full_name} has completed the morning session.",
-                "student":    student,
-                "attendance": record,
-                "sms_sent":   False,
-                "action":     "complete",
-                "session":    "morning",
+                "success":            True,
+                "message":            f"{student.full_name} has completed the morning session.",
+                "kind":               "student",
+                "student":            student,
+                "teacher":            None,
+                "attendance":         record,
+                "teacher_attendance": None,
+                "sms_sent":           False,
+                "action":             "complete",
+                "session":            "morning",
             }
 
     else:
@@ -307,26 +337,146 @@ def process_scan(rfid_uid: str, db: Session) -> dict:
         else:
             db.commit()
             return {
-                "success":    True,
-                "message":    f"{student.full_name} has completed all sessions for today.",
-                "student":    student,
-                "attendance": record,
-                "sms_sent":   False,
-                "action":     "complete",
-                "session":    None,
+                "success":            True,
+                "message":            f"{student.full_name} has completed all sessions for today.",
+                "kind":               "student",
+                "student":            student,
+                "teacher":            None,
+                "attendance":         record,
+                "teacher_attendance": None,
+                "sms_sent":           False,
+                "action":             "complete",
+                "session":            None,
             }
 
     db.commit()
     db.refresh(record)
 
     return {
-        "success":    True,
-        "message":    message,
-        "student":    student,
-        "attendance": record,
-        "sms_sent":   sms_sent,
-        "action":     action,
-        "session":    session,
+        "success":            True,
+        "message":            message,
+        "kind":               "student",
+        "student":            student,
+        "teacher":            None,
+        "attendance":         record,
+        "teacher_attendance": None,
+        "sms_sent":           sms_sent,
+        "action":             action,
+        "session":            session,
+    }
+
+
+# ── Teacher scan handler ──────────────────────────────────────────────────────
+
+def _process_teacher_scan(teacher: Teacher, db: Session) -> dict:
+    """
+    Per-teacher scan handler. Same AM/PM 4-scan flow as students, but:
+      - writes to teacher_attendance table
+      - never sends SMS (teachers don't have parent contacts)
+      - status doesn't track late/absent for now (could add later if needed)
+    Returns the same dict shape as _process_student_scan, with kind="teacher".
+    """
+    now = _now()
+    today = now.date()
+    current_time = now.time().replace(microsecond=0)
+    dept = teacher.department or "—"
+
+    record: Optional[TeacherAttendance] = (
+        db.query(TeacherAttendance)
+        .filter(TeacherAttendance.teacher_id == teacher.id,
+                TeacherAttendance.date == today)
+        .first()
+    )
+
+    is_pm = _is_afternoon(current_time)
+
+    if record is None:
+        if not is_pm:
+            status = AttendanceStatus.late if _is_late(current_time) else AttendanceStatus.present
+            record = TeacherAttendance(
+                teacher_id=teacher.id,
+                date=today,
+                am_time_in=current_time,
+                status=status,
+            )
+            db.add(record); db.flush()
+            action  = "am_in"
+            session = "morning"
+            label   = "LATE" if status == AttendanceStatus.late else "PRESENT"
+            message = f"✓ TEACHER IN — {teacher.full_name} | {dept} | {_fmt_time(current_time)} | {label}"
+        else:
+            record = TeacherAttendance(
+                teacher_id=teacher.id,
+                date=today,
+                pm_time_in=current_time,
+                status=AttendanceStatus.present,
+                notes="Morning session not recorded",
+            )
+            db.add(record); db.flush()
+            action  = "pm_in"
+            session = "afternoon"
+            message = f"✓ TEACHER PM IN — {teacher.full_name} | {dept} | {_fmt_time(current_time)} | Morning absent"
+
+    elif not is_pm:
+        if record.am_time_out is None and record.am_time_in is not None:
+            record.am_time_out = current_time
+            action  = "am_out"
+            session = "morning"
+            message = f"✓ TEACHER OUT — {teacher.full_name} | {dept} | {_fmt_time(current_time)}"
+        else:
+            db.commit()
+            return {
+                "success":            True,
+                "message":            f"{teacher.full_name} has completed the morning session.",
+                "kind":               "teacher",
+                "student":            None,
+                "teacher":            teacher,
+                "attendance":         None,
+                "teacher_attendance": record,
+                "sms_sent":           False,
+                "action":             "complete",
+                "session":            "morning",
+            }
+
+    else:
+        if record.pm_time_in is None:
+            record.pm_time_in = current_time
+            action  = "pm_in"
+            session = "afternoon"
+            message = f"✓ TEACHER PM IN — {teacher.full_name} | {dept} | {_fmt_time(current_time)}"
+        elif record.pm_time_out is None:
+            record.pm_time_out = current_time
+            action  = "pm_out"
+            session = "afternoon"
+            message = f"✓ TEACHER PM OUT — {teacher.full_name} | {dept} | {_fmt_time(current_time)}"
+        else:
+            db.commit()
+            return {
+                "success":            True,
+                "message":            f"{teacher.full_name} has completed all sessions for today.",
+                "kind":               "teacher",
+                "student":            None,
+                "teacher":            teacher,
+                "attendance":         None,
+                "teacher_attendance": record,
+                "sms_sent":           False,
+                "action":             "complete",
+                "session":            None,
+            }
+
+    db.commit()
+    db.refresh(record)
+    return {
+        "success":            True,
+        "message":            message,
+        "kind":               "teacher",
+        "student":            None,
+        "teacher":            teacher,
+        "attendance":         None,
+        "teacher_attendance": record,
+        "sms_sent":           False,
+        "action":             action,
+        "session":            session,
     }
 
 
