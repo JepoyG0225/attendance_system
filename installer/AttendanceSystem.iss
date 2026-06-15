@@ -65,6 +65,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon";       Description: "Create a Desktop shortcut for the Attendance Server";  GroupDescription: "Shortcuts"; Flags: checkedonce
 Name: "dashboardicon";     Description: "Create a Desktop shortcut to the Dashboard (http://localhost:{#MyAppPort})"; GroupDescription: "Shortcuts"; Flags: checkedonce
 Name: "autostart";         Description: "Start the server automatically when Windows boots"; GroupDescription: "System integration"; Flags: checkedonce
+Name: "autoapp";           Description: "Open the Attendance app window automatically at login"; GroupDescription: "System integration"; Flags: checkedonce
 Name: "firewall";          Description: "Open Windows Firewall for port {#MyAppPort} (LAN access for Pi scanners)"; GroupDescription: "System integration"; Flags: checkedonce
 
 [Files]
@@ -74,6 +75,7 @@ Source: "..\database.py";        DestDir: "{app}"; Flags: ignoreversion
 Source: "..\schemas.py";         DestDir: "{app}"; Flags: ignoreversion
 Source: "..\attendance.py";      DestDir: "{app}"; Flags: ignoreversion
 Source: "..\sms.py";             DestDir: "{app}"; Flags: ignoreversion
+Source: "..\settings.py";        DestDir: "{app}"; Flags: ignoreversion
 Source: "..\events.py";          DestDir: "{app}"; Flags: ignoreversion
 Source: "..\reports.py";         DestDir: "{app}"; Flags: ignoreversion
 Source: "..\app.py";             DestDir: "{app}"; Flags: ignoreversion
@@ -121,6 +123,12 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 ; Desktop (optional, controlled by [Tasks])
 Name: "{commondesktop}\Attendance System";    Filename: "{app}\windows\run_app.bat"; WorkingDir: "{app}"; IconFilename: "{app}\static\app-icon.ico"; Tasks: desktopicon
 Name: "{commondesktop}\Attendance Dashboard"; Filename: "{#MyAppDashboard}"; Tasks: dashboardicon
+
+; Startup (auto-open the app window for any user that logs in)
+;   - {commonstartup} = "All Users" Startup folder → fires on EVERY login
+;   - We launch run_app.bat which spawns pythonw.exe and detaches; cmd
+;     exits immediately so the Startup folder doesn't hang the shell.
+Name: "{commonstartup}\Attendance System"; Filename: "{app}\windows\run_app.bat"; WorkingDir: "{app}"; IconFilename: "{app}\static\app-icon.ico"; Comment: "Auto-launch the Attendance app at login"; Tasks: autoapp
 
 [Dirs]
 Name: "{app}\static\photos"; Permissions: users-modify

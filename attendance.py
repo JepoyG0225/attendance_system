@@ -25,10 +25,10 @@ from config import (
     SCHOOL_NAME, SCHOOL_TIMEZONE,
     LATE_HOUR, LATE_MINUTE,
     AFTERNOON_HOUR, AFTERNOON_MINUTE,
-    SMS_AM_IN_TEMPLATE, SMS_AM_OUT_TEMPLATE,
-    SMS_PM_IN_TEMPLATE, SMS_PM_OUT_TEMPLATE,
-    SMS_ABSENT_TEMPLATE, SMS_PM_ABSENT_TEMPLATE,
 )
+# SMS templates + teacher recipients are read at send time from the
+# settings table so the dashboard can edit them without a restart.
+from settings import get_setting, get_teacher_recipients
 # Optional newer config values; provide sensible defaults if the user's
 # config.py was written before these settings existed.
 try:
@@ -87,12 +87,28 @@ def is_school_day(d: date, db: Session) -> tuple[bool, Optional[str]]:
             return False, h.name
     return True, None
 
-def _sms(template: str, student: Student, t: dtime, d: date) -> str:
+def _sms(template_key: str, student: Student, t: dtime, d: date) -> str:
+    """Render a STUDENT SMS template stored in settings.
+    Supports both {name} (new) and {student_name} (legacy) placeholders."""
+    template = get_setting(template_key)
     return template.format(
         school=SCHOOL_NAME,
-        student_name=student.full_name,
+        name=student.full_name,
+        student_name=student.full_name,        # legacy alias
         grade=student.grade_name,
         section=student.section_name,
+        time=_fmt_time(t),
+        date=_fmt_date(d),
+    )
+
+
+def _teacher_sms(template_key: str, teacher: "Teacher", t: dtime, d: date) -> str:
+    """Render a TEACHER SMS template stored in settings."""
+    template = get_setting(template_key)
+    return template.format(
+        school=SCHOOL_NAME,
+        name=teacher.full_name,
+        department=teacher.department or "—",
         time=_fmt_time(t),
         date=_fmt_date(d),
     )
@@ -133,6 +149,38 @@ def _enqueue_sms_and_log(student: Student, sms_text: str, sms_type: str, db: Ses
         "sms_type": sms_type,
     })
     return True
+
+
+def _enqueue_teacher_sms(teacher: Teacher, sms_text: str, sms_type: str, db: Session) -> bool:
+    """
+    Fan out a teacher SMS to every configured recipient (typically 2 admin
+    numbers like principal + HR). Each recipient gets its own SMSLog row +
+    queue job so we can track delivery per-number.
+    Returns True if at least one SMS was queued.
+    """
+    recipients = get_teacher_recipients(db=db)
+    if not recipients:
+        return False
+    sent_count = 0
+    for phone in recipients:
+        log = SMSLog(
+            teacher_id=teacher.id,
+            phone=phone,
+            message=sms_text,
+            sms_type=f"teacher_{sms_type}",
+            status=SMSStatus.pending,
+        )
+        db.add(log)
+        db.flush()
+        _SMS_QUEUE.put({
+            "log_id":       log.id,
+            "student_name": f"Teacher: {teacher.full_name}",
+            "phone":        phone,
+            "message":      sms_text,
+            "sms_type":     f"teacher_{sms_type}",
+        })
+        sent_count += 1
+    return sent_count > 0
 
 
 def _sms_worker() -> None:
@@ -249,7 +297,7 @@ def _process_student_scan(student: Student, db: Session) -> dict:
                 f"{_fmt_time(current_time)} | {label}"
             )
             sms_sent = _enqueue_sms_and_log(
-                student, _sms(SMS_AM_IN_TEMPLATE, student, current_time, today),
+                student, _sms("sms.student.am_in_template", student, current_time, today),
                 "am_in", db
             )
         else:
@@ -271,7 +319,7 @@ def _process_student_scan(student: Student, db: Session) -> dict:
                 f"{_fmt_time(current_time)} | Morning absent"
             )
             sms_sent = _enqueue_sms_and_log(
-                student, _sms(SMS_PM_IN_TEMPLATE, student, current_time, today),
+                student, _sms("sms.student.pm_in_template", student, current_time, today),
                 "pm_in", db
             )
 
@@ -288,7 +336,7 @@ def _process_student_scan(student: Student, db: Session) -> dict:
                 f"{_fmt_time(current_time)}"
             )
             sms_sent = _enqueue_sms_and_log(
-                student, _sms(SMS_AM_OUT_TEMPLATE, student, current_time, today),
+                student, _sms("sms.student.am_out_template", student, current_time, today),
                 "am_out", db
             )
         else:
@@ -318,7 +366,7 @@ def _process_student_scan(student: Student, db: Session) -> dict:
                 f"{_fmt_time(current_time)}"
             )
             sms_sent = _enqueue_sms_and_log(
-                student, _sms(SMS_PM_IN_TEMPLATE, student, current_time, today),
+                student, _sms("sms.student.pm_in_template", student, current_time, today),
                 "pm_in", db
             )
         elif record.pm_time_out is None:
@@ -331,7 +379,7 @@ def _process_student_scan(student: Student, db: Session) -> dict:
                 f"{_fmt_time(current_time)}"
             )
             sms_sent = _enqueue_sms_and_log(
-                student, _sms(SMS_PM_OUT_TEMPLATE, student, current_time, today),
+                student, _sms("sms.student.pm_out_template", student, current_time, today),
                 "pm_out", db
             )
         else:
@@ -464,6 +512,22 @@ def _process_teacher_scan(teacher: Teacher, db: Session) -> dict:
                 "session":            None,
             }
 
+    # Queue teacher SMS to each configured admin recipient (principal, HR,
+    # etc.) — never goes to the teacher themselves.
+    sms_sent = False
+    template_key = {
+        "am_in":  "sms.teacher.am_in_template",
+        "am_out": "sms.teacher.am_out_template",
+        "pm_in":  "sms.teacher.pm_in_template",
+        "pm_out": "sms.teacher.pm_out_template",
+    }.get(action)
+    if template_key:
+        try:
+            body = _teacher_sms(template_key, teacher, current_time, today)
+            sms_sent = _enqueue_teacher_sms(teacher, body, action, db)
+        except Exception as e:
+            logger.warning(f"[Teacher SMS] enqueue failed for {teacher.full_name}: {e}")
+
     db.commit()
     db.refresh(record)
     return {
@@ -474,7 +538,7 @@ def _process_teacher_scan(teacher: Teacher, db: Session) -> dict:
         "teacher":            teacher,
         "attendance":         None,
         "teacher_attendance": record,
-        "sms_sent":           False,
+        "sms_sent":           sms_sent,
         "action":             action,
         "session":            session,
     }
@@ -538,7 +602,7 @@ def check_absences(session: str, db: Session) -> dict:
                     record.status = AttendanceStatus.absent
                     record.notes = "Auto-marked absent (no morning scan)"
 
-                msg = _sms(SMS_ABSENT_TEMPLATE, student, now_time, today)
+                msg = _sms("sms.student.absent_template", student, now_time, today)
                 _send_and_log(student, msg, "absent_am", db)
                 notified.append(student.full_name)
                 logger.info(f"[ABSENT AM] {student.full_name}")
@@ -558,7 +622,7 @@ def check_absences(session: str, db: Session) -> dict:
                 if already_sent:
                     continue
 
-                msg = _sms(SMS_PM_ABSENT_TEMPLATE, student, now_time, today)
+                msg = _sms("sms.student.pm_absent_template", student, now_time, today)
                 _send_and_log(student, msg, "absent_pm", db)
                 notified.append(student.full_name)
                 logger.info(f"[ABSENT PM] {student.full_name}")

@@ -157,6 +157,19 @@ class Teacher(Base):
         return f"<Teacher {self.full_name} | RFID: {self.rfid_uid}>"
 
 
+class AppSetting(Base):
+    """
+    Generic key/value settings table for runtime-editable config (SMS
+    templates, teacher SMS recipients, etc.). Keeping it generic means we
+    can add new tunables without a schema migration.
+    """
+    __tablename__ = "app_settings"
+
+    key        = Column(String(100), primary_key=True)
+    value      = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class TeacherAttendance(Base):
     """Same shape as Attendance — separate table so student/teacher analytics
     don't tangle, and so we can evolve teacher policy independently (no SMS,
@@ -195,7 +208,10 @@ class SMSLog(Base):
     __tablename__ = "sms_logs"
 
     id         = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    # Exactly one of student_id / teacher_id is set per row. Both nullable
+    # so we can log teacher SMS (which has no student behind it).
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
+    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
     phone      = Column(String(20), nullable=False)
     message    = Column(Text, nullable=False)
     sms_type   = Column(String(20), nullable=False)
@@ -205,6 +221,7 @@ class SMSLog(Base):
     sent_at    = Column(DateTime(timezone=True), server_default=func.now())
 
     student    = relationship("Student", back_populates="sms_logs")
+    teacher    = relationship("Teacher")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -240,4 +257,41 @@ def init_db():
                 "UPDATE attendance SET am_time_in=time_in, am_time_out=time_out "
                 "WHERE am_time_in IS NULL AND time_in IS NOT NULL"
             ))
+
+        # ── Migrate existing sms_logs to support teacher SMS rows ─────────
+        # SQLite can't drop NOT NULL via ALTER, so when the old schema is
+        # detected we do the standard "rename → recreate → copy → drop"
+        # dance to relax student_id and add teacher_id.
+        sms_meta = {c["name"]: c for c in insp.get_columns("sms_logs")}
+        needs_rebuild = (
+            "teacher_id" not in sms_meta
+            or sms_meta.get("student_id", {}).get("nullable") is False
+        )
+        if needs_rebuild:
+            print("[DB] Rebuilding sms_logs to allow teacher SMS rows...")
+            conn.execute(text("ALTER TABLE sms_logs RENAME TO sms_logs_old"))
+            conn.execute(text("""
+                CREATE TABLE sms_logs (
+                    id          INTEGER PRIMARY KEY,
+                    student_id  INTEGER REFERENCES students(id),
+                    teacher_id  INTEGER REFERENCES teachers(id),
+                    phone       VARCHAR(20) NOT NULL,
+                    message     TEXT NOT NULL,
+                    sms_type    VARCHAR(20) NOT NULL,
+                    status      VARCHAR(20),
+                    modem_used  VARCHAR(50),
+                    error_msg   TEXT,
+                    sent_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            # Copy existing rows (no teacher_id values in the old data).
+            conn.execute(text("""
+                INSERT INTO sms_logs
+                    (id, student_id, teacher_id, phone, message, sms_type, status, modem_used, error_msg, sent_at)
+                SELECT id, student_id, NULL, phone, message, sms_type, status, modem_used, error_msg, sent_at
+                FROM sms_logs_old
+            """))
+            conn.execute(text("DROP TABLE sms_logs_old"))
+            conn.execute(text("CREATE INDEX ix_sms_logs_id ON sms_logs(id)"))
+            print("[DB] Rebuilt: sms_logs (student_id nullable, teacher_id added)")
     print("[DB] Tables created / verified.")

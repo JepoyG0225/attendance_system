@@ -678,6 +678,9 @@
     <button class="nav-item" data-page="sms" onclick="switchPage('sms')">
       <span class="icon">💬</span> <span>SMS &amp; Modems</span>
     </button>
+    <button class="nav-item" data-page="templates" onclick="switchPage('templates')">
+      <span class="icon">📝</span> <span>SMS Templates</span>
+    </button>
 
     <div class="sidebar-section">System</div>
     <button class="nav-item" data-page="scanner" onclick="switchPage('scanner')">
@@ -1176,6 +1179,49 @@
       </section>
 
       <!-- ═════════════════════════════════════════════════════════════════
+           PAGE: SMS TEMPLATES
+      ══════════════════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-templates">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-head">
+            <h3>Teacher SMS Recipients</h3>
+            <span class="hint">All teacher scan events are SMS'd to every number in this list</span>
+          </div>
+          <div class="card-body">
+            <p class="modal-subtitle" style="margin-bottom:10px">
+              These are the admin / principal / HR contacts who receive every teacher RFID tap.
+              Use the PH mobile format: <code>09XXXXXXXXX</code> or <code>+639XXXXXXXXX</code>.
+            </p>
+            <div id="teacher-recipients-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+            <button class="btn btn-outline btn-sm" onclick="addTeacherRecipient()">＋ Add another number</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-head">
+            <h3>SMS Templates</h3>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="loadSmsTemplates()">↻ Reload</button>
+              <button class="btn btn-success btn-sm" onclick="saveSmsTemplates()">💾 Save all</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <p class="modal-subtitle" style="margin-bottom:14px">
+              Placeholders: <code>{school}</code>, <code>{name}</code>, <code>{time}</code>, <code>{date}</code>.
+              Student templates also support <code>{grade}</code>, <code>{section}</code>, and the legacy
+              <code>{student_name}</code>. Teacher templates also support <code>{department}</code>.
+            </p>
+
+            <h4 style="margin-top:8px;margin-bottom:8px;color:var(--text-2)">Students — parent notifications</h4>
+            <div id="student-templates" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px"></div>
+
+            <h4 style="margin-top:8px;margin-bottom:8px;color:var(--text-2)">Teachers — admin notifications</h4>
+            <div id="teacher-templates" style="display:flex;flex-direction:column;gap:10px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════════
            PAGE: RFID SCANNER
       ══════════════════════════════════════════════════════════════════════ -->
       <section class="page" id="page-scanner">
@@ -1517,6 +1563,7 @@ const PAGE_META = {
   reports:    { title: "Reports",          sub: "Monthly attendance summaries" },
   calendar:   { title: "Calendar",         sub: "Holidays and non-school days" },
   sms:        { title: "SMS & Modems",     sub: "Notification activity and GSM status" },
+  templates:  { title: "SMS Templates",    sub: "Customize student + teacher SMS content and teacher recipient list" },
   scanner:    { title: "RFID Scanner",     sub: "Test scans and access kiosk URLs" },
   system:     { title: "System Status",    sub: "Server, schedule, and hardware health" },
 };
@@ -1540,6 +1587,7 @@ function switchPage(name) {
   if (name === "reports")    initReports();
   if (name === "calendar")   loadHolidays();
   if (name === "sms")        { loadSmsLogs(); loadModemStatus(); }
+  if (name === "templates")  loadSmsTemplates();
   if (name === "scanner")    setTimeout(() => document.getElementById("rfid-input").focus(), 50);
   if (name === "system")     loadSystemInfo();
 }
@@ -2564,6 +2612,96 @@ function renderTeacherAttendance(records) {
       <td>${chip(r.status)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.notes || ""}</td>
     </tr>`).join("");
+}
+
+// ── SMS TEMPLATES ─────────────────────────────────────────────────────────────
+const STUDENT_TEMPLATE_KEYS = [
+  { key: "sms.student.am_in_template",     label: "1st scan — Morning IN",        rows: 3 },
+  { key: "sms.student.am_out_template",    label: "2nd scan — Morning OUT (lunch)", rows: 3 },
+  { key: "sms.student.pm_in_template",     label: "3rd scan — Afternoon IN",       rows: 3 },
+  { key: "sms.student.pm_out_template",    label: "4th scan — Afternoon OUT (go home)", rows: 3 },
+  { key: "sms.student.absent_template",    label: "AM absent auto-check",          rows: 3 },
+  { key: "sms.student.pm_absent_template", label: "PM absent auto-check",          rows: 3 },
+];
+const TEACHER_TEMPLATE_KEYS = [
+  { key: "sms.teacher.am_in_template",  label: "Teacher — Morning IN" },
+  { key: "sms.teacher.am_out_template", label: "Teacher — Morning OUT" },
+  { key: "sms.teacher.pm_in_template",  label: "Teacher — Afternoon IN" },
+  { key: "sms.teacher.pm_out_template", label: "Teacher — Afternoon OUT" },
+];
+
+async function loadSmsTemplates() {
+  try {
+    const data = await fetch(`${API}/settings?prefix=sms.`).then(r => r.json());
+    const settings = data.settings || {};
+    renderTemplateInputs("student-templates", STUDENT_TEMPLATE_KEYS, settings);
+    renderTemplateInputs("teacher-templates", TEACHER_TEMPLATE_KEYS, settings);
+    renderTeacherRecipients(data.teacher_recipients || []);
+  } catch (e) {
+    toast("Could not load SMS settings");
+  }
+}
+
+function renderTemplateInputs(containerId, defs, settings) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = defs.map(d => `
+    <div class="form-row">
+      <label>${d.label} <span class="hint"><code>${d.key}</code></span></label>
+      <textarea class="input" data-setting-key="${d.key}" rows="${d.rows || 3}"
+                style="font-family:monospace;font-size:.85rem;line-height:1.4;resize:vertical"
+                >${(settings[d.key] || "").replace(/</g,"&lt;")}</textarea>
+    </div>`).join("");
+}
+
+function renderTeacherRecipients(numbers) {
+  const list = document.getElementById("teacher-recipients-list");
+  if (!numbers.length) numbers = [""];   // start with one empty row
+  list.innerHTML = numbers.map((n, i) => `
+    <div class="form-row" style="display:flex;gap:8px;align-items:center;margin:0">
+      <input type="text" class="input recipient-input" value="${n}"
+             placeholder="09XXXXXXXXX or +639XXXXXXXXX" style="flex:1" />
+      <button class="btn btn-danger btn-sm" onclick="removeTeacherRecipient(${i})" title="Remove">✕</button>
+    </div>`).join("");
+}
+
+function addTeacherRecipient() {
+  const current = Array.from(document.querySelectorAll(".recipient-input")).map(i => i.value);
+  current.push("");
+  renderTeacherRecipients(current);
+}
+function removeTeacherRecipient(idx) {
+  const current = Array.from(document.querySelectorAll(".recipient-input")).map(i => i.value);
+  current.splice(idx, 1);
+  renderTeacherRecipients(current.length ? current : [""]);
+}
+
+async function saveSmsTemplates() {
+  // Collect templates from every textarea with data-setting-key
+  const payload = {};
+  document.querySelectorAll("textarea[data-setting-key]").forEach(ta => {
+    payload[ta.dataset.settingKey] = ta.value;
+  });
+  // Collect recipients (filter empties)
+  payload.teacher_recipients = Array.from(document.querySelectorAll(".recipient-input"))
+    .map(i => i.value.trim()).filter(Boolean);
+  try {
+    const r = await fetch(`${API}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      toast(`Saved — ${data.saved} setting(s) updated`);
+      // Re-render with whatever the server normalized
+      const settings = data.settings || {};
+      renderTemplateInputs("student-templates", STUDENT_TEMPLATE_KEYS, settings);
+      renderTemplateInputs("teacher-templates", TEACHER_TEMPLATE_KEYS, settings);
+      renderTeacherRecipients(data.teacher_recipients || []);
+    } else {
+      toast(data.detail || "Save failed");
+    }
+  } catch (e) { toast("Could not reach server"); }
 }
 
 // ── CLASSES (Grades + Sections) ───────────────────────────────────────────────

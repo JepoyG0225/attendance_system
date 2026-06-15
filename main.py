@@ -53,6 +53,11 @@ from schemas import (
     TeacherCreate, TeacherOut, TeacherUpdate, TeacherAttendanceOut,
 )
 from attendance import process_scan, get_daily_summary, check_absences
+from settings import (
+    get_all_settings, get_setting, set_setting,
+    get_teacher_recipients, set_teacher_recipients,
+    seed_defaults as seed_default_settings,
+)
 from sms import (
     test_all_modems,
     _resolve_modem_ports,
@@ -119,6 +124,7 @@ async def _attach_event_loop():
 @app.on_event("startup")
 def on_startup():
     init_db()
+    seed_default_settings()   # SMS templates etc. — idempotent
     scheduler.start()
     mode = "SIMULATION" if SIMULATION_MODE else "PRODUCTION"
     logger.info(f"Attendance System v2 started | Mode: {mode}")
@@ -1225,6 +1231,66 @@ def list_serial_ports():
         }
         for p in _lp.comports()
     ]
+
+
+# ── Settings (SMS templates + teacher SMS recipients) ─────────────────────────
+
+@app.get("/settings", tags=["Settings"])
+def list_settings(prefix: Optional[str] = None):
+    """
+    Return every known setting key with its current value (DB override
+    or default). Use ?prefix=sms. to filter.
+
+    Includes a parsed `teacher_recipients` list for convenience so the
+    dashboard doesn't have to JSON-decode it client-side.
+    """
+    out = get_all_settings(prefix=prefix)
+    return {
+        "settings": out,
+        "teacher_recipients": get_teacher_recipients(),
+    }
+
+
+@app.put("/settings", tags=["Settings"])
+def update_settings(payload: dict, db: Session = Depends(get_db)):
+    """
+    Bulk update. Accepts a JSON object whose keys are setting keys and
+    whose values are the new string values. Also accepts a top-level
+    `teacher_recipients` list — phone numbers stored as JSON in
+    `sms.teacher.recipients`.
+
+    Unknown keys are accepted (no whitelist) so future additions don't
+    need an API change — but only the documented keys actually affect
+    behavior.
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Payload must be a JSON object")
+
+    written = 0
+
+    # Teacher recipients get their own dedicated helper because they're
+    # stored as a JSON-encoded list of phone numbers.
+    if "teacher_recipients" in payload:
+        recipients = payload.pop("teacher_recipients")
+        if not isinstance(recipients, list):
+            raise HTTPException(400, "teacher_recipients must be a list of phone numbers")
+        set_teacher_recipients([str(p) for p in recipients], db=db)
+        written += 1
+
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            raise HTTPException(400, f"Setting key must be a string: {key!r}")
+        # Coerce to string — settings are stored as TEXT
+        set_setting(key, "" if value is None else str(value), db=db)
+        written += 1
+
+    logger.info(f"[Settings] Updated {written} key(s)")
+    # Return the fresh view
+    return {
+        "saved":              written,
+        "settings":           get_all_settings(db=db),
+        "teacher_recipients": get_teacher_recipients(db=db),
+    }
 
 
 @app.post("/attendance/check-absent", tags=["Attendance"])

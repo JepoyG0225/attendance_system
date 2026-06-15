@@ -673,16 +673,12 @@ function showStudent(data) {
   const timeLabels = { am_in: 'MORNING ARRIVAL', am_out: 'MORNING DISMISSAL', pm_in: 'AFTERNOON ARRIVAL', pm_out: 'AFTERNOON DISMISSAL' };
   document.getElementById('time-label').textContent = timeLabels[action] || 'RECORDED';
 
-  // SMS row — teachers don't have parents, so suppress entirely for them
-  if (isTeacher) {
-    document.getElementById('sms-icon').textContent = '';
-    document.getElementById('sms-text').textContent = '';
-  } else {
-    document.getElementById('sms-icon').textContent = data.sms_sent ? '📱' : '📵';
-    document.getElementById('sms-text').textContent = data.sms_sent
-      ? 'SMS queued/sent'
-      : 'SMS not sent';
-  }
+  // SMS row — teacher scans now do send SMS (to configured admin recipients),
+  // so we show the same icon/text for both kinds.
+  document.getElementById('sms-icon').textContent = data.sms_sent ? '📱' : '📵';
+  document.getElementById('sms-text').textContent = data.sms_sent
+    ? 'SMS queued/sent'
+    : 'SMS not sent';
 
   showScreen('result');
   scheduleReset();
