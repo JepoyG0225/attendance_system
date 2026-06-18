@@ -140,13 +140,18 @@ class Holiday(Base):
 # ── Teacher ────────────────────────────────────────────────────────────────────
 
 class Teacher(Base):
+    """
+    Internally still called `Teacher` to keep existing endpoints + DB
+    column names stable; the dashboard renders this as "Faculty & Staff".
+    """
     __tablename__ = "teachers"
 
     id           = Column(Integer, primary_key=True, index=True)
     rfid_uid     = Column(String(50), unique=True, index=True, nullable=False)
     full_name    = Column(String(100), nullable=False)
-    department   = Column(String(80),  nullable=True)   # e.g. "Mathematics", "Admin"
-    phone        = Column(String(20),  nullable=True)
+    # "Faculty" or "Staff" — drives the scanner badge text and the SMS
+    # template's {role} placeholder. Falls back to "Faculty" if unset.
+    role         = Column(String(20),  nullable=False, default="Faculty")
     is_active    = Column(Boolean, default=True)
     photo_path   = Column(String(255), nullable=True)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
@@ -154,7 +159,7 @@ class Teacher(Base):
     attendances  = relationship("TeacherAttendance", back_populates="teacher")
 
     def __repr__(self):
-        return f"<Teacher {self.full_name} | RFID: {self.rfid_uid}>"
+        return f"<Teacher {self.full_name} | {self.role} | RFID: {self.rfid_uid}>"
 
 
 class AppSetting(Base):
@@ -267,6 +272,26 @@ def init_db():
             "teacher_id" not in sms_meta
             or sms_meta.get("student_id", {}).get("nullable") is False
         )
+        # ── Migrate existing teachers table to new shape ──────────────────
+        # Drop legacy `department` + `phone` columns and add `role`.
+        # SQLite 3.35+ supports DROP COLUMN; the wrapping try/except handles
+        # older runtimes by falling through silently — the rebuilt sms_logs
+        # path covers them via separate logic if needed.
+        if insp.has_table("teachers"):
+            t_cols = {c["name"] for c in insp.get_columns("teachers")}
+            if "role" not in t_cols:
+                conn.execute(text("ALTER TABLE teachers ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'Faculty'"))
+                print("[DB] Migrated: added column teachers.role")
+            for legacy in ("department", "phone"):
+                if legacy in t_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE teachers DROP COLUMN {legacy}"))
+                        print(f"[DB] Migrated: dropped column teachers.{legacy}")
+                    except Exception as e:
+                        # Older SQLite versions can't drop columns — non-fatal;
+                        # the ORM just ignores the extra column.
+                        print(f"[DB] Could not drop teachers.{legacy} ({e}); ignoring.")
+
         if needs_rebuild:
             print("[DB] Rebuilding sms_logs to allow teacher SMS rows...")
             conn.execute(text("ALTER TABLE sms_logs RENAME TO sms_logs_old"))

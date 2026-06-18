@@ -674,7 +674,7 @@
     </button>
     <button class="nav-item" data-page="teachers" onclick="switchPage('teachers')">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m2 9 10-4 10 4-10 4z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v5"/></svg></span>
-      <span>Teachers</span>
+      <span>Faculty &amp; Staff</span>
     </button>
     <button class="nav-item" data-page="classes" onclick="switchPage('classes')">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/><path d="M9 11h.01M15 11h.01"/></svg></span>
@@ -924,8 +924,13 @@
       <section class="page" id="page-teachers">
         <div class="card">
           <div class="toolbar">
-            <input type="text" class="input input-search" id="teacher-search" placeholder="Search by name, RFID, or department..." oninput="filterTeachers()" style="flex:1;min-width:240px" />
-            <button class="btn btn-primary" onclick="openRegisterTeacherModal()">＋ Register Teacher</button>
+            <input type="text" class="input input-search" id="teacher-search" placeholder="Search by name, RFID, or role..." oninput="filterTeachers()" style="flex:1;min-width:240px" />
+            <select class="select" id="teacher-role-filter" onchange="filterTeachers()">
+              <option value="">All roles</option>
+              <option value="Faculty">Faculty</option>
+              <option value="Staff">Staff</option>
+            </select>
+            <button class="btn btn-primary" onclick="openRegisterTeacherModal()">＋ Register Faculty/Staff</button>
           </div>
           <div class="table-wrap">
             <table>
@@ -933,8 +938,7 @@
                 <tr>
                   <th></th>
                   <th>Name</th>
-                  <th>Department</th>
-                  <th>Phone</th>
+                  <th>Role</th>
                   <th>RFID UID</th>
                   <th>Actions</th>
                 </tr>
@@ -946,7 +950,7 @@
 
         <div class="card" style="margin-top:18px">
           <div class="card-head">
-            <h3>Teacher Attendance — Today</h3>
+            <h3>Faculty &amp; Staff Attendance — Today</h3>
             <input type="date" class="input" id="teacher-att-date" onchange="loadTeacherAttendance()" style="max-width:200px" />
           </div>
           <div class="table-wrap">
@@ -954,7 +958,7 @@
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Department</th>
+                  <th>Role</th>
                   <th>AM In</th>
                   <th>AM Out</th>
                   <th>PM In</th>
@@ -1203,12 +1207,12 @@
       <section class="page" id="page-templates">
         <div class="card" style="margin-bottom:18px">
           <div class="card-head">
-            <h3>Teacher SMS Recipients</h3>
-            <span class="hint">All teacher scan events are SMS'd to every number in this list</span>
+            <h3>Faculty / Staff SMS Recipients</h3>
+            <span class="hint">Every faculty or staff scan is SMS'd to all numbers in this list</span>
           </div>
           <div class="card-body">
             <p class="modal-subtitle" style="margin-bottom:10px">
-              These are the admin / principal / HR contacts who receive every teacher RFID tap.
+              Admin / principal / HR contacts who receive every faculty &amp; staff RFID tap.
               Use the PH mobile format: <code>09XXXXXXXXX</code> or <code>+639XXXXXXXXX</code>.
             </p>
             <div id="teacher-recipients-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
@@ -1228,13 +1232,14 @@
             <p class="modal-subtitle" style="margin-bottom:14px">
               Placeholders: <code>{school}</code>, <code>{name}</code>, <code>{time}</code>, <code>{date}</code>.
               Student templates also support <code>{grade}</code>, <code>{section}</code>, and the legacy
-              <code>{student_name}</code>. Teacher templates also support <code>{department}</code>.
+              <code>{student_name}</code>. Faculty / staff templates also support <code>{role}</code> (resolves
+              to "Faculty" or "Staff").
             </p>
 
             <h4 style="margin-top:8px;margin-bottom:8px;color:var(--text-2)">Students — parent notifications</h4>
             <div id="student-templates" style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px"></div>
 
-            <h4 style="margin-top:8px;margin-bottom:8px;color:var(--text-2)">Teachers — admin notifications</h4>
+            <h4 style="margin-top:8px;margin-bottom:8px;color:var(--text-2)">Faculty &amp; Staff — admin notifications</h4>
             <div id="teacher-templates" style="display:flex;flex-direction:column;gap:10px"></div>
           </div>
         </div>
@@ -1482,30 +1487,28 @@
   </div>
 </div>
 
-<!-- Register / Edit Teacher -->
+<!-- Register / Edit Faculty or Staff -->
 <div class="modal-overlay" id="teacher-modal">
   <div class="modal">
-    <h3 id="teacher-modal-title">Register Teacher</h3>
-    <p class="modal-subtitle">Add a faculty or staff member. Their RFID card unlocks teacher attendance.</p>
+    <h3 id="teacher-modal-title">Register Faculty/Staff</h3>
+    <p class="modal-subtitle">Add a faculty member or staff member. Their RFID card enables clock-in/clock-out tracking.</p>
     <input type="hidden" id="teacher-edit-id" />
     <div class="form-group">
       <label>Full Name *</label>
       <input type="text" class="input" id="teacher-form-name" placeholder="e.g. Maria L. Santos" />
     </div>
     <div class="form-group">
-      <label>Department</label>
-      <input type="text" class="input" id="teacher-form-dept" placeholder="e.g. Mathematics" />
-      <small>Optional — shown on the scanner badge when this teacher taps in.</small>
-    </div>
-    <div class="form-group">
-      <label>Phone</label>
-      <input type="text" class="input" id="teacher-form-phone" placeholder="09171234567" maxlength="13" />
-      <small>Optional. Teacher SMS is sent to the admin recipient list, not to the teacher.</small>
+      <label>Role *</label>
+      <select class="select" id="teacher-form-role">
+        <option value="Faculty">Faculty (teacher)</option>
+        <option value="Staff">Staff (admin, maintenance, security, …)</option>
+      </select>
+      <small>Drives the scanner badge ("FACULTY" or "STAFF") and the <code>{role}</code> placeholder in teacher SMS templates.</small>
     </div>
     <div class="form-group">
       <label>RFID Card UID *</label>
       <input type="text" class="input" id="teacher-form-rfid" placeholder="Tap card on reader, or type UID manually" />
-      <small>Focus this field then tap the teacher's RFID card on the connected reader.</small>
+      <small>Focus this field then tap the card on the connected reader.</small>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeTeacherModal()">Cancel</button>
@@ -1580,7 +1583,7 @@ const PAGE_META = {
   dashboard:  { title: "Dashboard",        sub: "Today's attendance at a glance" },
   attendance: { title: "Attendance",       sub: "View and edit attendance records" },
   students:   { title: "Students",         sub: "Enrolled student directory" },
-  teachers:   { title: "Teachers",         sub: "Faculty + staff RFID + attendance" },
+  teachers:   { title: "Faculty & Staff",  sub: "RFID, role, and attendance for non-student personnel" },
   classes:    { title: "Grades & Sections",sub: "Manage classes and promotions" },
   reports:    { title: "Reports",          sub: "Monthly attendance summaries" },
   calendar:   { title: "Calendar",         sub: "Holidays and non-school days" },
@@ -1657,7 +1660,7 @@ function _handleScanEvent(data) {
   };
   const actionLabel = actionMap[data.action] || data.action || "scan";
   const name = person.full_name || "Someone";
-  const prefix = isTeacher ? "👨‍🏫 " : "";
+  const prefix = isTeacher ? `${(person.role || "Faculty").toUpperCase()} · ` : "";
   toast(`${prefix}${name} — ${actionLabel}`);
 
   // Refresh only what's currently visible — cheap and avoids surprise reloads.
@@ -2510,23 +2513,27 @@ async function loadTeachers() {
 
 function filterTeachers() {
   const q = (document.getElementById("teacher-search").value || "").toLowerCase();
-  const rows = q
-    ? allTeachers.filter(t =>
-        (t.full_name || "").toLowerCase().includes(q) ||
-        (t.department || "").toLowerCase().includes(q) ||
-        (t.rfid_uid  || "").toLowerCase().includes(q))
-    : allTeachers;
+  const roleFilter = (document.getElementById("teacher-role-filter")?.value || "").toLowerCase();
+  let rows = allTeachers;
+  if (q) {
+    rows = rows.filter(t =>
+      (t.full_name || "").toLowerCase().includes(q) ||
+      (t.role      || "").toLowerCase().includes(q) ||
+      (t.rfid_uid  || "").toLowerCase().includes(q));
+  }
+  if (roleFilter) {
+    rows = rows.filter(t => (t.role || "").toLowerCase() === roleFilter);
+  }
   const tbody = document.getElementById("teacher-tbody");
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty"><div class="empty-icon">👨‍🏫</div>No teachers registered yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty"><div class="empty-icon">🎓</div>No faculty or staff registered yet.</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(t => `
     <tr>
       <td>${avatar(t)}</td>
       <td><strong>${t.full_name}</strong></td>
-      <td>${t.department || "—"}</td>
-      <td>${t.phone || "—"}</td>
+      <td>${roleChip(t.role)}</td>
       <td><code>${t.rfid_uid}</code></td>
       <td style="white-space:nowrap">
         <button class="btn btn-secondary btn-sm" onclick="openEditTeacherModal(${t.id})">Edit</button>
@@ -2535,13 +2542,19 @@ function filterTeachers() {
     </tr>`).join("");
 }
 
+function roleChip(role) {
+  const r = (role || "Faculty");
+  // Faculty → green chip, Staff → blue/neutral chip
+  const cls = r === "Staff" ? "chip-late" : "chip-present";
+  return `<span class="chip ${cls}">${r.toUpperCase()}</span>`;
+}
+
 function openRegisterTeacherModal() {
-  document.getElementById("teacher-modal-title").textContent = "Register Teacher";
-  document.getElementById("teacher-edit-id").value    = "";
-  document.getElementById("teacher-form-name").value  = "";
-  document.getElementById("teacher-form-dept").value  = "";
-  document.getElementById("teacher-form-phone").value = "";
-  document.getElementById("teacher-form-rfid").value  = "";
+  document.getElementById("teacher-modal-title").textContent = "Register Faculty/Staff";
+  document.getElementById("teacher-edit-id").value   = "";
+  document.getElementById("teacher-form-name").value = "";
+  document.getElementById("teacher-form-role").value = "Faculty";
+  document.getElementById("teacher-form-rfid").value = "";
   document.getElementById("teacher-modal").classList.add("open");
   setTimeout(() => document.getElementById("teacher-form-name").focus(), 50);
 }
@@ -2549,12 +2562,11 @@ function openRegisterTeacherModal() {
 function openEditTeacherModal(id) {
   const t = allTeachers.find(x => x.id === id);
   if (!t) return;
-  document.getElementById("teacher-modal-title").textContent = "Edit Teacher";
-  document.getElementById("teacher-edit-id").value    = String(id);
-  document.getElementById("teacher-form-name").value  = t.full_name || "";
-  document.getElementById("teacher-form-dept").value  = t.department || "";
-  document.getElementById("teacher-form-phone").value = t.phone || "";
-  document.getElementById("teacher-form-rfid").value  = t.rfid_uid || "";
+  document.getElementById("teacher-modal-title").textContent = "Edit Faculty/Staff";
+  document.getElementById("teacher-edit-id").value   = String(id);
+  document.getElementById("teacher-form-name").value = t.full_name || "";
+  document.getElementById("teacher-form-role").value = t.role      || "Faculty";
+  document.getElementById("teacher-form-rfid").value = t.rfid_uid  || "";
   document.getElementById("teacher-modal").classList.add("open");
 }
 
@@ -2563,12 +2575,11 @@ function closeTeacherModal() {
 }
 
 async function saveTeacher() {
-  const id    = document.getElementById("teacher-edit-id").value.trim();
-  const body  = {
-    full_name:  document.getElementById("teacher-form-name").value.trim(),
-    department: document.getElementById("teacher-form-dept").value.trim() || null,
-    phone:      document.getElementById("teacher-form-phone").value.trim() || null,
-    rfid_uid:   document.getElementById("teacher-form-rfid").value.trim().toUpperCase(),
+  const id   = document.getElementById("teacher-edit-id").value.trim();
+  const body = {
+    full_name: document.getElementById("teacher-form-name").value.trim(),
+    role:      document.getElementById("teacher-form-role").value,
+    rfid_uid:  document.getElementById("teacher-form-rfid").value.trim().toUpperCase(),
   };
   if (!body.full_name || !body.rfid_uid) {
     toast("Name and RFID are required"); return;
@@ -2581,7 +2592,7 @@ async function saveTeacher() {
       body: JSON.stringify(body),
     });
     if (r.ok) {
-      toast(id ? "Teacher updated" : "Teacher registered");
+      toast(id ? `${body.role} updated` : `${body.role} registered`);
       closeTeacherModal();
       loadTeachers();
     } else {
@@ -2593,7 +2604,7 @@ async function saveTeacher() {
 
 function deleteTeacher(id, name) {
   confirmAction(
-    "Remove teacher",
+    "Remove faculty / staff member",
     `Deactivate <strong>${name}</strong>? Attendance history is kept; they just won't appear on scanners.`,
     async () => {
       const r = await fetch(`${API}/teachers/${id}`, { method: "DELETE" });
@@ -2620,13 +2631,13 @@ async function loadTeacherAttendance() {
 function renderTeacherAttendance(records) {
   const tbody = document.getElementById("teacher-att-tbody");
   if (!records.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty"><div class="empty-icon">📅</div>No teacher attendance for this date.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty"><div class="empty-icon">📅</div>No faculty/staff attendance for this date.</td></tr>`;
     return;
   }
   tbody.innerHTML = records.map(r => `
     <tr>
       <td><strong>${r.teacher_name || ""}</strong></td>
-      <td>${r.department || "—"}</td>
+      <td>${roleChip(r.role)}</td>
       <td>${fmtTime(r.am_time_in)}</td>
       <td>${fmtTime(r.am_time_out)}</td>
       <td>${fmtTime(r.pm_time_in)}</td>
@@ -2646,10 +2657,10 @@ const STUDENT_TEMPLATE_KEYS = [
   { key: "sms.student.pm_absent_template", label: "PM absent auto-check",          rows: 3 },
 ];
 const TEACHER_TEMPLATE_KEYS = [
-  { key: "sms.teacher.am_in_template",  label: "Teacher — Morning IN" },
-  { key: "sms.teacher.am_out_template", label: "Teacher — Morning OUT" },
-  { key: "sms.teacher.pm_in_template",  label: "Teacher — Afternoon IN" },
-  { key: "sms.teacher.pm_out_template", label: "Teacher — Afternoon OUT" },
+  { key: "sms.teacher.am_in_template",  label: "Faculty / Staff — Morning IN" },
+  { key: "sms.teacher.am_out_template", label: "Faculty / Staff — Morning OUT" },
+  { key: "sms.teacher.pm_in_template",  label: "Faculty / Staff — Afternoon IN" },
+  { key: "sms.teacher.pm_out_template", label: "Faculty / Staff — Afternoon OUT" },
 ];
 
 async function loadSmsTemplates() {

@@ -103,12 +103,12 @@ def _sms(template_key: str, student: Student, t: dtime, d: date) -> str:
 
 
 def _teacher_sms(template_key: str, teacher: "Teacher", t: dtime, d: date) -> str:
-    """Render a TEACHER SMS template stored in settings."""
+    """Render a Faculty/Staff SMS template stored in settings."""
     template = get_setting(template_key)
     return template.format(
         school=SCHOOL_NAME,
         name=teacher.full_name,
-        department=teacher.department or "—",
+        role=teacher.role or "Faculty",
         time=_fmt_time(t),
         date=_fmt_date(d),
     )
@@ -427,7 +427,7 @@ def _process_teacher_scan(teacher: Teacher, db: Session) -> dict:
     now = _now()
     today = now.date()
     current_time = now.time().replace(microsecond=0)
-    dept = teacher.department or "—"
+    role = teacher.role or "Faculty"
 
     record: Optional[TeacherAttendance] = (
         db.query(TeacherAttendance)
@@ -451,7 +451,7 @@ def _process_teacher_scan(teacher: Teacher, db: Session) -> dict:
             action  = "am_in"
             session = "morning"
             label   = "LATE" if status == AttendanceStatus.late else "PRESENT"
-            message = f"✓ TEACHER IN — {teacher.full_name} | {dept} | {_fmt_time(current_time)} | {label}"
+            message = f"✓ TEACHER IN — {teacher.full_name} | {role} | {_fmt_time(current_time)} | {label}"
         else:
             record = TeacherAttendance(
                 teacher_id=teacher.id,
@@ -463,14 +463,14 @@ def _process_teacher_scan(teacher: Teacher, db: Session) -> dict:
             db.add(record); db.flush()
             action  = "pm_in"
             session = "afternoon"
-            message = f"✓ TEACHER PM IN — {teacher.full_name} | {dept} | {_fmt_time(current_time)} | Morning absent"
+            message = f"✓ TEACHER PM IN — {teacher.full_name} | {role} | {_fmt_time(current_time)} | Morning absent"
 
     elif not is_pm:
         if record.am_time_out is None and record.am_time_in is not None:
             record.am_time_out = current_time
             action  = "am_out"
             session = "morning"
-            message = f"✓ TEACHER OUT — {teacher.full_name} | {dept} | {_fmt_time(current_time)}"
+            message = f"✓ TEACHER OUT — {teacher.full_name} | {role} | {_fmt_time(current_time)}"
         else:
             db.commit()
             return {
@@ -491,12 +491,12 @@ def _process_teacher_scan(teacher: Teacher, db: Session) -> dict:
             record.pm_time_in = current_time
             action  = "pm_in"
             session = "afternoon"
-            message = f"✓ TEACHER PM IN — {teacher.full_name} | {dept} | {_fmt_time(current_time)}"
+            message = f"✓ TEACHER PM IN — {teacher.full_name} | {role} | {_fmt_time(current_time)}"
         elif record.pm_time_out is None:
             record.pm_time_out = current_time
             action  = "pm_out"
             session = "afternoon"
-            message = f"✓ TEACHER PM OUT — {teacher.full_name} | {dept} | {_fmt_time(current_time)}"
+            message = f"✓ TEACHER PM OUT — {teacher.full_name} | {role} | {_fmt_time(current_time)}"
         else:
             db.commit()
             return {

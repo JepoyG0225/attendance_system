@@ -181,8 +181,7 @@ def _teacher_out(t: Teacher) -> TeacherOut:
         id=t.id,
         rfid_uid=t.rfid_uid,
         full_name=t.full_name,
-        department=t.department,
-        phone=t.phone,
+        role=t.role or "Faculty",
         is_active=t.is_active,
         photo_path=t.photo_path,
         created_at=t.created_at,
@@ -780,15 +779,14 @@ def register_teacher(data: TeacherCreate, db: Session = Depends(get_db)):
     if db.query(Student).filter(Student.rfid_uid == rfid).first():
         raise HTTPException(400, f"RFID {rfid} is already assigned to a student")
     if db.query(Teacher).filter(Teacher.rfid_uid == rfid).first():
-        raise HTTPException(400, f"RFID {rfid} is already assigned to a teacher")
+        raise HTTPException(400, f"RFID {rfid} is already assigned to a faculty/staff member")
     teacher = Teacher(
         rfid_uid=rfid,
         full_name=data.full_name.strip(),
-        department=(data.department or "").strip() or None,
-        phone=data.phone,
+        role=data.role,
     )
     db.add(teacher); db.commit(); db.refresh(teacher)
-    logger.info(f"Registered teacher: {teacher.full_name} | RFID: {teacher.rfid_uid}")
+    logger.info(f"Registered {teacher.role}: {teacher.full_name} | RFID: {teacher.rfid_uid}")
     return _teacher_out(teacher)
 
 
@@ -870,7 +868,7 @@ def get_teacher_attendance(
     for r in records:
         item = TeacherAttendanceOut.model_validate(r)
         item.teacher_name = r.teacher.full_name if r.teacher else None
-        item.department   = r.teacher.department if r.teacher else None
+        item.role         = r.teacher.role      if r.teacher else None
         out.append(item)
     return out
 
@@ -904,7 +902,7 @@ def update_teacher_attendance(
     db.commit(); db.refresh(r)
     out = TeacherAttendanceOut.model_validate(r)
     out.teacher_name = r.teacher.full_name if r.teacher else None
-    out.department   = r.teacher.department if r.teacher else None
+    out.role         = r.teacher.role      if r.teacher else None
     return out
 
 

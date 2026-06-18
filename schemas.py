@@ -96,24 +96,24 @@ class StudentUpdate(BaseModel):
         return v
 
 
-# ── Teacher ───────────────────────────────────────────────────────────────────
+# ── Teacher (Faculty & Staff) ─────────────────────────────────────────────────
+# We keep the API name "Teacher" so existing endpoints don't break, but the
+# UI labels these as "Faculty & Staff". Role identifies which of the two.
+
+ALLOWED_TEACHER_ROLES = ("Faculty", "Staff")
+
 
 class TeacherCreate(BaseModel):
     rfid_uid:   str
     full_name:  str
-    department: Optional[str] = None
-    phone:      Optional[str] = None
+    role:       str = "Faculty"
 
-    @field_validator("phone")
+    @field_validator("role")
     @classmethod
-    def normalize_teacher_phone(cls, v: Optional[str]) -> Optional[str]:
-        if not v:
-            return v
-        v = v.strip().replace(" ", "").replace("-", "")
-        if v.startswith("09") and len(v) == 11:
-            v = "+63" + v[1:]
-        if not re.match(r"^\+639\d{9}$", v):
-            raise ValueError("Invalid PH mobile. Use 09XXXXXXXXX or +639XXXXXXXXX")
+    def validate_role(cls, v: str) -> str:
+        v = (v or "Faculty").strip().title()
+        if v not in ALLOWED_TEACHER_ROLES:
+            raise ValueError(f"role must be one of {ALLOWED_TEACHER_ROLES}")
         return v
 
 
@@ -121,8 +121,7 @@ class TeacherOut(BaseModel):
     id:         int
     rfid_uid:   str
     full_name:  str
-    department: Optional[str] = None
-    phone:      Optional[str] = None
+    role:       str
     is_active:  bool
     photo_path: Optional[str] = None
     created_at: datetime
@@ -132,20 +131,17 @@ class TeacherOut(BaseModel):
 class TeacherUpdate(BaseModel):
     rfid_uid:   Optional[str]  = None
     full_name:  Optional[str]  = None
-    department: Optional[str]  = None
-    phone:      Optional[str]  = None
+    role:       Optional[str]  = None
     is_active:  Optional[bool] = None
 
-    @field_validator("phone")
+    @field_validator("role")
     @classmethod
-    def normalize_teacher_phone_update(cls, v: Optional[str]) -> Optional[str]:
+    def validate_role_update(cls, v: Optional[str]) -> Optional[str]:
         if v is None or v == "":
             return v
-        v = v.strip().replace(" ", "").replace("-", "")
-        if v.startswith("09") and len(v) == 11:
-            v = "+63" + v[1:]
-        if not re.match(r"^\+639\d{9}$", v):
-            raise ValueError("Invalid PH mobile. Use 09XXXXXXXXX or +639XXXXXXXXX")
+        v = v.strip().title()
+        if v not in ALLOWED_TEACHER_ROLES:
+            raise ValueError(f"role must be one of {ALLOWED_TEACHER_ROLES}")
         return v
 
 
@@ -160,7 +156,7 @@ class TeacherAttendanceOut(BaseModel):
     status:       AttendanceStatus
     notes:        Optional[str]
     teacher_name: Optional[str] = None
-    department:   Optional[str] = None
+    role:         Optional[str] = None
     model_config = {"from_attributes": True}
 
 

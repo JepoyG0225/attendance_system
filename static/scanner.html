@@ -628,11 +628,10 @@ function showStudent(data) {
     initialsEl.textContent = s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   }
 
-  // Sub-badge: grade/section for students, "TEACHER · Department" for teachers
+  // Sub-badge: grade/section for students, role (FACULTY / STAFF) for faculty & staff
   const badge = document.getElementById('student-grade-badge');
   if (isTeacher) {
-    const dept = s.department || '';
-    badge.textContent = dept ? `TEACHER · ${dept}` : 'TEACHER';
+    badge.textContent = (s.role || 'FACULTY').toUpperCase();
   } else {
     const gradeSec = [s.grade, s.section].filter(Boolean).join(' — ');
     badge.textContent = gradeSec || 'No section';

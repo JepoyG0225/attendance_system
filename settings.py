@@ -47,23 +47,24 @@ from config import (
 logger = logging.getLogger(__name__)
 
 
-# ── Default teacher templates ────────────────────────────────────────────────
+# ── Default Faculty/Staff templates ───────────────────────────────────────────
 # These ship as defaults — users override them via the SMS Templates page.
+# `{role}` resolves to "Faculty" or "Staff" depending on the person's role.
 DEFAULT_TEACHER_AM_IN_TEMPLATE = (
-    "[{school}] Teacher {name} ({department}) clocked IN this morning "
-    "({date}) at {time}. - Automated Attendance System"
+    "[{school}] {role} {name} clocked IN this morning ({date}) at {time}. "
+    "- Automated Attendance System"
 )
 DEFAULT_TEACHER_AM_OUT_TEMPLATE = (
-    "[{school}] Teacher {name} ({department}) clocked OUT for lunch on "
-    "{date} at {time}. - Automated Attendance System"
+    "[{school}] {role} {name} clocked OUT for lunch on {date} at {time}. "
+    "- Automated Attendance System"
 )
 DEFAULT_TEACHER_PM_IN_TEMPLATE = (
-    "[{school}] Teacher {name} ({department}) returned from lunch on "
-    "{date} at {time}. - Automated Attendance System"
+    "[{school}] {role} {name} returned from lunch on {date} at {time}. "
+    "- Automated Attendance System"
 )
 DEFAULT_TEACHER_PM_OUT_TEMPLATE = (
-    "[{school}] Teacher {name} ({department}) clocked out for the day on "
-    "{date} at {time}. - Automated Attendance System"
+    "[{school}] {role} {name} clocked out for the day on {date} at {time}. "
+    "- Automated Attendance System"
 )
 
 
@@ -142,20 +143,32 @@ def get_all_settings(prefix: Optional[str] = None, db: Optional[Session] = None)
 
 def seed_defaults() -> None:
     """
-    Idempotent — only inserts keys that are missing. Safe to call on every
-    startup; doesn't touch any value the user has already customized.
+    Idempotent on a fresh install — inserts the missing default keys.
+
+    Also runs a one-time migration: any teacher template still referencing
+    the now-removed `{department}` placeholder is reset to the new default
+    (with `{role}`). User-edited templates that don't mention `{department}`
+    are left alone.
     """
     db = SessionLocal()
     try:
-        existing = {r.key for r in db.query(AppSetting).all()}
-        added = 0
+        rows = {r.key: r for r in db.query(AppSetting).all()}
+        added, migrated = 0, 0
         for k, v in DEFAULTS.items():
-            if k not in existing:
+            if k not in rows:
                 db.add(AppSetting(key=k, value=v))
                 added += 1
-        if added:
+            elif k.startswith("sms.teacher.") and k.endswith("_template"):
+                # Migrate away from legacy {department} placeholder
+                if rows[k].value and "{department}" in rows[k].value:
+                    rows[k].value = v
+                    migrated += 1
+        if added or migrated:
             db.commit()
-            logger.info(f"[Settings] Seeded {added} default value(s)")
+            if added:
+                logger.info(f"[Settings] Seeded {added} default value(s)")
+            if migrated:
+                logger.info(f"[Settings] Migrated {migrated} teacher template(s) from {{department}} to {{role}}")
     finally:
         db.close()
 
