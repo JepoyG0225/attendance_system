@@ -1469,21 +1469,24 @@
     <h3 id="teacher-modal-title">Register Teacher</h3>
     <p class="modal-subtitle">Add a faculty or staff member. Their RFID card unlocks teacher attendance.</p>
     <input type="hidden" id="teacher-edit-id" />
-    <div class="form-row">
-      <label>Full Name</label>
+    <div class="form-group">
+      <label>Full Name *</label>
       <input type="text" class="input" id="teacher-form-name" placeholder="e.g. Maria L. Santos" />
     </div>
-    <div class="form-row">
-      <label>Department <span class="hint">(optional)</span></label>
+    <div class="form-group">
+      <label>Department</label>
       <input type="text" class="input" id="teacher-form-dept" placeholder="e.g. Mathematics" />
+      <small>Optional — shown on the scanner badge when this teacher taps in.</small>
     </div>
-    <div class="form-row">
-      <label>Phone <span class="hint">(optional, PH mobile)</span></label>
-      <input type="text" class="input" id="teacher-form-phone" placeholder="09171234567" />
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="text" class="input" id="teacher-form-phone" placeholder="09171234567" maxlength="13" />
+      <small>Optional. Teacher SMS is sent to the admin recipient list, not to the teacher.</small>
     </div>
-    <div class="form-row">
-      <label>RFID UID</label>
-      <input type="text" class="input" id="teacher-form-rfid" placeholder="Scan card or type UID" />
+    <div class="form-group">
+      <label>RFID Card UID *</label>
+      <input type="text" class="input" id="teacher-form-rfid" placeholder="Tap card on reader, or type UID manually" />
+      <small>Focus this field then tap the teacher's RFID card on the connected reader.</small>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeTeacherModal()">Cancel</button>
@@ -2645,11 +2648,12 @@ async function loadSmsTemplates() {
 function renderTemplateInputs(containerId, defs, settings) {
   const container = document.getElementById(containerId);
   container.innerHTML = defs.map(d => `
-    <div class="form-row">
-      <label>${d.label} <span class="hint"><code>${d.key}</code></span></label>
+    <div class="form-group">
+      <label>${d.label}</label>
       <textarea class="input" data-setting-key="${d.key}" rows="${d.rows || 3}"
                 style="font-family:monospace;font-size:.85rem;line-height:1.4;resize:vertical"
                 >${(settings[d.key] || "").replace(/</g,"&lt;")}</textarea>
+      <small><code>${d.key}</code></small>
     </div>`).join("");
 }
 
@@ -2657,7 +2661,7 @@ function renderTeacherRecipients(numbers) {
   const list = document.getElementById("teacher-recipients-list");
   if (!numbers.length) numbers = [""];   // start with one empty row
   list.innerHTML = numbers.map((n, i) => `
-    <div class="form-row" style="display:flex;gap:8px;align-items:center;margin:0">
+    <div style="display:flex;gap:8px;align-items:center">
       <input type="text" class="input recipient-input" value="${n}"
              placeholder="09XXXXXXXXX or +639XXXXXXXXX" style="flex:1" />
       <button class="btn btn-danger btn-sm" onclick="removeTeacherRecipient(${i})" title="Remove">✕</button>
