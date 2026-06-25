@@ -584,7 +584,7 @@ async function submitScan(uid) {
       body: JSON.stringify({ rfid_uid: uid, scanner_id: SCANNER_ID }),
     }).then(r => r.json());
 
-    if (data.success && data.student) {
+    if (data.success && (data.student || data.teacher)) {
       showStudent(data);
     } else {
       showError(data.message || 'Unknown error');
