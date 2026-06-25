@@ -983,7 +983,9 @@ def update_attendance(
 
 @app.get("/sms-logs", response_model=list[SMSLogOut], tags=["SMS"])
 def get_sms_logs(limit: int = 50, db: Session = Depends(get_db)):
-    rows = db.query(SMSLog).order_by(SMSLog.sent_at.desc()).limit(limit).all()
+    # Order by id desc so the newest row is always on top — sent_at can tie to
+    # the same second (e.g. a teacher SMS fanned out to several recipients).
+    rows = db.query(SMSLog).order_by(SMSLog.id.desc()).limit(limit).all()
     # Resolve the recipient name once per id so teacher SMS rows (which have no
     # student behind them) show a name in the dashboard log, just like students.
     s_ids = {r.student_id for r in rows if r.student_id}

@@ -133,6 +133,7 @@ def _send_and_log(student: Student, sms_text: str, sms_type: str, db: Session) -
         status=SMSStatus.sent if result.success else SMSStatus.failed,
         modem_used=result.modem_used,
         error_msg=result.error if not result.success else None,
+        sent_at=_now().replace(tzinfo=None),   # local time, not UTC (func.now)
     )
     db.add(log)
     logger.info(f"SMS [{sms_type}] {student.full_name} → {'OK' if result.success else 'FAILED'}")
@@ -148,6 +149,7 @@ def _enqueue_sms_and_log(student: Student, sms_text: str, sms_type: str, db: Ses
         status=SMSStatus.pending,
         modem_used=None,
         error_msg=None,
+        sent_at=_now().replace(tzinfo=None),   # local time, not UTC (func.now)
     )
     db.add(log)
     db.flush()
@@ -183,6 +185,7 @@ def _enqueue_teacher_sms(teacher: Teacher, sms_text: str, sms_type: str, db: Ses
             message=sms_text,
             sms_type=f"teacher_{sms_type}",
             status=SMSStatus.pending,
+            sent_at=_now().replace(tzinfo=None),   # local time, not UTC (func.now)
         )
         db.add(log)
         db.flush()
