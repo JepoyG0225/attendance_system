@@ -25,7 +25,7 @@ Setting keys (all strings):
 Template placeholders:
   {school}, {name}, {time}, {date}
   {grade}, {section}     — student templates only
-  {department}           — teacher templates only
+  {role}                 — teacher templates only (resolves to Faculty/Staff)
 
 For backward compatibility student templates may also use the legacy
 {student_name} placeholder — it's aliased to {name} at render time.

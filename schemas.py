@@ -264,15 +264,19 @@ class HeartbeatOut(BaseModel):
 # ── SMS Log ───────────────────────────────────────────────────────────────────
 
 class SMSLogOut(BaseModel):
-    id:         int
-    student_id: int
-    phone:      str
-    message:    str
-    sms_type:   str
-    status:     SMSStatus
-    modem_used: Optional[str]
-    error_msg:  Optional[str]
-    sent_at:    datetime
+    id:             int
+    # Exactly one of student_id / teacher_id is set per row, so both are
+    # optional — teacher SMS rows have student_id=None and vice versa.
+    student_id:     Optional[int] = None
+    teacher_id:     Optional[int] = None
+    recipient_name: Optional[str] = None   # resolved student/teacher name
+    phone:          str
+    message:        str
+    sms_type:       str
+    status:         SMSStatus
+    modem_used:     Optional[str]
+    error_msg:      Optional[str]
+    sent_at:        datetime
     model_config = {"from_attributes": True}
 
 

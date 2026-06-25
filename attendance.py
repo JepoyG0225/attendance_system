@@ -87,11 +87,20 @@ def is_school_day(d: date, db: Session) -> tuple[bool, Optional[str]]:
             return False, h.name
     return True, None
 
+class _SafeDict(dict):
+    """format_map() helper: unknown placeholders render as empty string instead
+    of raising KeyError. Keeps a customized template (e.g. a leftover
+    {department} or {student_name} in a teacher template) from crashing the
+    send and silently dropping the SMS."""
+    def __missing__(self, key):
+        return ""
+
+
 def _sms(template_key: str, student: Student, t: dtime, d: date) -> str:
     """Render a STUDENT SMS template stored in settings.
     Supports both {name} (new) and {student_name} (legacy) placeholders."""
     template = get_setting(template_key)
-    return template.format(
+    return template.format_map(_SafeDict(
         school=SCHOOL_NAME,
         name=student.full_name,
         student_name=student.full_name,        # legacy alias
@@ -99,19 +108,20 @@ def _sms(template_key: str, student: Student, t: dtime, d: date) -> str:
         section=student.section_name,
         time=_fmt_time(t),
         date=_fmt_date(d),
-    )
+    ))
 
 
 def _teacher_sms(template_key: str, teacher: "Teacher", t: dtime, d: date) -> str:
     """Render a Faculty/Staff SMS template stored in settings."""
     template = get_setting(template_key)
-    return template.format(
+    return template.format_map(_SafeDict(
         school=SCHOOL_NAME,
         name=teacher.full_name,
+        student_name=teacher.full_name,        # tolerate templates copied from student ones
         role=teacher.role or "Faculty",
         time=_fmt_time(t),
         date=_fmt_date(d),
-    )
+    ))
 
 def _send_and_log(student: Student, sms_text: str, sms_type: str, db: Session) -> bool:
     result = send_sms(student.parent_phone, sms_text)
@@ -160,6 +170,10 @@ def _enqueue_teacher_sms(teacher: Teacher, sms_text: str, sms_type: str, db: Ses
     """
     recipients = get_teacher_recipients(db=db)
     if not recipients:
+        logger.warning(
+            "[Teacher SMS] No recipients configured — nothing sent for "
+            f"{teacher.full_name}. Add admin numbers on the SMS Templates page."
+        )
         return False
     sent_count = 0
     for phone in recipients:

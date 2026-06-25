@@ -19,7 +19,7 @@
 
 #define MyAppName        "Attendance System"
 #define MyAppShortName   "AttendanceSystem"
-#define MyAppVersion     "2.1.0"
+#define MyAppVersion     "2.1.1"
 #define MyAppPublisher   "Saint Joseph Academy Cuyo"
 #define MyAppExeName     "run_server.bat"
 #define MyAppDashboard   "http://localhost:8000"

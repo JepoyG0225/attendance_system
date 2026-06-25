@@ -983,7 +983,41 @@ def update_attendance(
 
 @app.get("/sms-logs", response_model=list[SMSLogOut], tags=["SMS"])
 def get_sms_logs(limit: int = 50, db: Session = Depends(get_db)):
-    return db.query(SMSLog).order_by(SMSLog.sent_at.desc()).limit(limit).all()
+    rows = db.query(SMSLog).order_by(SMSLog.sent_at.desc()).limit(limit).all()
+    # Resolve the recipient name once per id so teacher SMS rows (which have no
+    # student behind them) show a name in the dashboard log, just like students.
+    s_ids = {r.student_id for r in rows if r.student_id}
+    t_ids = {r.teacher_id for r in rows if r.teacher_id}
+    s_names = {
+        s.id: s.full_name
+        for s in db.query(Student).filter(Student.id.in_(s_ids)).all()
+    } if s_ids else {}
+    t_names = {
+        t.id: t.full_name
+        for t in db.query(Teacher).filter(Teacher.id.in_(t_ids)).all()
+    } if t_ids else {}
+    out = []
+    for r in rows:
+        if r.student_id:
+            name = s_names.get(r.student_id) or f"Student #{r.student_id}"
+        elif r.teacher_id:
+            name = t_names.get(r.teacher_id) or f"Faculty/Staff #{r.teacher_id}"
+        else:
+            name = None
+        out.append(SMSLogOut(
+            id=r.id,
+            student_id=r.student_id,
+            teacher_id=r.teacher_id,
+            recipient_name=name,
+            phone=r.phone,
+            message=r.message,
+            sms_type=r.sms_type,
+            status=r.status,
+            modem_used=r.modem_used,
+            error_msg=r.error_msg,
+            sent_at=r.sent_at,
+        ))
+    return out
 
 
 # ── Holidays ──────────────────────────────────────────────────────────────────

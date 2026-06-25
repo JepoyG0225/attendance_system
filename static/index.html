@@ -3005,7 +3005,7 @@ async function loadSmsLogs() {
     tbody.innerHTML = smsLogs.map(s => `
       <tr>
         <td>${fmtDateTime(s.sent_at)}</td>
-        <td>${(allStudents.find(x => x.id === s.student_id) || {}).full_name || `ID ${s.student_id}`}</td>
+        <td>${s.recipient_name || (allStudents.find(x => x.id === s.student_id) || {}).full_name || "—"}</td>
         <td>${s.phone}</td>
         <td>${s.sms_type}</td>
         <td>${chip(s.status)}${s.error_msg ? `<div style="font-size:.7rem;color:var(--red);margin-top:2px">${s.error_msg}</div>` : ""}</td>
