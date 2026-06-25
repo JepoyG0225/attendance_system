@@ -190,14 +190,19 @@ def _teacher_out(t: Teacher) -> TeacherOut:
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
 
+# Kiosk browsers (especially the Pi scanners) cache HTML aggressively, so a code
+# update never shows until the cache is cleared. Force a fresh fetch every load.
+_NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+
+
 @app.get("/", include_in_schema=False)
 def dashboard():
-    return FileResponse("static/index.html")
+    return FileResponse("static/index.html", headers=_NO_CACHE)
 
 
 @app.get("/scanner", include_in_schema=False)
 def scanner_page():
-    return FileResponse("static/scanner.html")
+    return FileResponse("static/scanner.html", headers=_NO_CACHE)
 
 
 # ── RFID Scan ─────────────────────────────────────────────────────────────────
