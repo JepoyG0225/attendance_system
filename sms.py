@@ -342,10 +342,28 @@ def _resolve_modem_ports(active_probe: bool = False) -> dict:
 
 # ── Low-level AT helpers ──────────────────────────────────────────────────────
 
-def _send_at(ser: serial.Serial, command: str, wait: float = 1.0) -> str:
+def _read_until(ser: serial.Serial, terminators: tuple[str, ...], max_wait: float) -> str:
+    """Accumulate serial output until one of `terminators` appears (e.g. OK,
+    ERROR, '>') or max_wait elapses. Replaces the old fixed-sleep + single-read
+    approach, which missed the reply whenever the modem answered a beat slower
+    than the sleep — the cause of spurious 'Failed to set text mode' errors."""
+    deadline = time.time() + max_wait
+    response = ""
+    while time.time() < deadline:
+        n = ser.in_waiting
+        if n:
+            response += ser.read(n).decode(errors="ignore")
+            if any(t in response for t in terminators):
+                break
+        else:
+            time.sleep(0.05)
+    return response
+
+
+def _send_at(ser: serial.Serial, command: str, wait: float = 1.0,
+             terminators: tuple[str, ...] = ("OK", "ERROR"), max_wait: float = 8.0) -> str:
     ser.write((command + "\r\n").encode())
-    time.sleep(wait)
-    response = ser.read(ser.in_waiting or 1).decode(errors="ignore")
+    response = _read_until(ser, terminators, max_wait)
     logger.debug(f"AT>> {command!r}  <<  {response!r}")
     return response
 
@@ -376,15 +394,15 @@ def _try_send(modem_cfg: dict, phone: str, message: str) -> tuple[bool, str]:
                 if "OK" not in resp:
                     return False, f"[{label}] Failed to set text mode"
     
-                # 3. Recipient
-                _send_at(ser, f'AT+CMGS="{phone}"', wait=0.5)
-    
-                # 4. Message body + Ctrl+Z
+                # 3. Recipient — wait for the '>' prompt before sending the body
+                resp = _send_at(ser, f'AT+CMGS="{phone}"', terminators=(">", "ERROR"), max_wait=8.0)
+                if ">" not in resp:
+                    return False, f"[{label}] No '>' prompt for recipient ({resp.strip() or 'no reply'})"
+
+                # 4. Message body + Ctrl+Z — submission can take several seconds
                 ser.write((message + "\x1a").encode())
-                time.sleep(timeout)
-    
-                resp = ser.read(ser.in_waiting or 1).decode(errors="ignore")
-                if "+CMGS:" in resp or "OK" in resp:
+                resp = _read_until(ser, ("+CMGS", "ERROR"), max_wait=max(timeout, 20.0))
+                if "+CMGS" in resp or "OK" in resp:
                     logger.info(f"SMS sent via {label} to {phone}")
                     return True, ""
                 else:
