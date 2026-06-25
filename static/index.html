@@ -965,6 +965,7 @@
                   <th>PM Out</th>
                   <th>Status</th>
                   <th>Notes</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="teacher-att-tbody"></tbody>
@@ -1493,6 +1494,14 @@
     <h3 id="teacher-modal-title">Register Faculty/Staff</h3>
     <p class="modal-subtitle">Add a faculty member or staff member. Their RFID card enables clock-in/clock-out tracking.</p>
     <input type="hidden" id="teacher-edit-id" />
+    <div id="teacher-photo-row" style="display:none;gap:14px;margin-bottom:14px;align-items:center">
+      <div id="teacher-photo-preview" style="width:64px;height:64px;border-radius:50%;overflow:hidden;background:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--text-3);border:1px solid var(--border)">—</div>
+      <div style="flex:1">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('teacher-photo-file').click()">Change Photo</button>
+        <small style="display:block;color:var(--text-3);font-size:.74rem;margin-top:4px">JPG/PNG/WEBP, square works best</small>
+        <input type="file" id="teacher-photo-file" accept="image/*" style="display:none" onchange="uploadTeacherPhoto()" />
+      </div>
+    </div>
     <div class="form-group">
       <label>Full Name *</label>
       <input type="text" class="input" id="teacher-form-name" placeholder="e.g. Maria L. Santos" />
@@ -2555,6 +2564,7 @@ function openRegisterTeacherModal() {
   document.getElementById("teacher-form-name").value = "";
   document.getElementById("teacher-form-role").value = "Faculty";
   document.getElementById("teacher-form-rfid").value = "";
+  document.getElementById("teacher-photo-row").style.display = "none";
   document.getElementById("teacher-modal").classList.add("open");
   setTimeout(() => document.getElementById("teacher-form-name").focus(), 50);
 }
@@ -2567,7 +2577,37 @@ function openEditTeacherModal(id) {
   document.getElementById("teacher-form-name").value = t.full_name || "";
   document.getElementById("teacher-form-role").value = t.role      || "Faculty";
   document.getElementById("teacher-form-rfid").value = t.rfid_uid  || "";
+  const preview = document.getElementById("teacher-photo-preview");
+  if (t.photo_path) {
+    preview.innerHTML = `<img src="${t.photo_path}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover" />`;
+  } else {
+    preview.textContent = (t.full_name || "?").trim().charAt(0).toUpperCase() || "—";
+  }
+  document.getElementById("teacher-photo-row").style.display = "flex";
   document.getElementById("teacher-modal").classList.add("open");
+}
+
+async function uploadTeacherPhoto() {
+  const id = document.getElementById("teacher-edit-id").value.trim();
+  if (!id) return;
+  const file = document.getElementById("teacher-photo-file").files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const r = await fetch(`${API}/teachers/${id}/photo`, { method: "POST", body: fd });
+    const data = await r.json();
+    if (r.ok) {
+      toast("Photo updated");
+      document.getElementById("teacher-photo-preview").innerHTML =
+        `<img src="${data.photo_path}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover" />`;
+      loadTeachers();
+    } else {
+      toast(data.detail || "Could not upload photo");
+    }
+  } catch (e) {
+    toast("Upload failed");
+  }
 }
 
 function closeTeacherModal() {
@@ -2631,7 +2671,7 @@ async function loadTeacherAttendance() {
 function renderTeacherAttendance(records) {
   const tbody = document.getElementById("teacher-att-tbody");
   if (!records.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty"><div class="empty-icon">📅</div>No faculty/staff attendance for this date.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty"><div class="empty-icon">📅</div>No faculty/staff attendance for this date.</td></tr>`;
     return;
   }
   tbody.innerHTML = records.map(r => `
@@ -2644,7 +2684,21 @@ function renderTeacherAttendance(records) {
       <td>${fmtTime(r.pm_time_out)}</td>
       <td>${chip(r.status)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.notes || ""}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-danger btn-sm" onclick="deleteTeacherAttendance(${r.id},'${(r.teacher_name||'').replace(/'/g,"\\'")}')">Del</button>
+      </td>
     </tr>`).join("");
+}
+function deleteTeacherAttendance(id, name) {
+  showConfirmModal(
+    "Delete attendance record",
+    `Delete the record for ${name}? This cannot be undone.`,
+    async () => {
+      const r = await fetch(`${API}/teacher-attendance/${id}`, { method: "DELETE" });
+      if (r.ok) { toast(`Record for ${name} deleted`); loadTeacherAttendance(); }
+      else     { toast("Could not delete"); }
+    }
+  );
 }
 
 // ── SMS TEMPLATES ─────────────────────────────────────────────────────────────
