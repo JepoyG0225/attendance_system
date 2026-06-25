@@ -48,6 +48,19 @@ GSM_AUTO_DETECT_PORTS = True
 # Set to 0 to disable (detection still happens on send_sms / test_all_modems).
 GSM_HOTPLUG_POLL_SECONDS = 5
 
+# ── Semaphore HTTP SMS API (online fallback) ──────────────────────────────────
+# Used when the GSM modem fails (or as the only channel if no modem is working).
+# Sends over the internet via https://semaphore.co — no SIM/modem required.
+SEMAPHORE_ENABLED  = True
+SEMAPHORE_API_KEY  = "aef206109fe75b5278c86eb2ad586ede"
+# Must be a sender name APPROVED on the Semaphore dashboard. "SJAC" was applied
+# for on 2026-06-25 and is currently Pending — sends will start succeeding
+# automatically once Semaphore approves it (status -> Active). This account has
+# no other active sender, and Semaphore's generic "SEMAPHORE" sender is rejected
+# for it, so a working approved name is required before any SMS can be sent.
+SEMAPHORE_SENDER   = "SJAC"
+SEMAPHORE_API_URL  = "https://api.semaphore.co/api/v4/messages"
+
 # ── SMS message templates ─────────────────────────────────────────────────────
 # Placeholders: {student_name} {grade} {section} {time} {date} {school}
 

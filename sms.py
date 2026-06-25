@@ -33,6 +33,15 @@ try:
     from config import GSM_HOTPLUG_POLL_SECONDS
 except ImportError:
     GSM_HOTPLUG_POLL_SECONDS = 5
+try:
+    from config import (
+        SEMAPHORE_ENABLED, SEMAPHORE_API_KEY, SEMAPHORE_SENDER, SEMAPHORE_API_URL,
+    )
+except ImportError:
+    SEMAPHORE_ENABLED = False
+    SEMAPHORE_API_KEY = ""
+    SEMAPHORE_SENDER = ""
+    SEMAPHORE_API_URL = "https://api.semaphore.co/api/v4/messages"
 
 logger = logging.getLogger(__name__)
 _MODEM_IO_LOCK = threading.Lock()
@@ -418,6 +427,50 @@ def _try_send(modem_cfg: dict, phone: str, message: str) -> tuple[bool, str]:
         return False, f"[{label}] {e}"
 
 
+# ── Semaphore HTTP SMS fallback ─────────────────────────────────────────────────
+
+def _ph_local(phone: str) -> str:
+    """Normalise a PH number to 11-digit local form (09xxxxxxxxx) for Semaphore."""
+    p = (phone or "").strip().replace(" ", "").replace("-", "")
+    if p.startswith("+63"):
+        p = "0" + p[3:]
+    elif p.startswith("63") and len(p) == 12:
+        p = "0" + p[2:]
+    return p
+
+
+def _send_via_semaphore(phone: str, message: str) -> tuple[bool, str]:
+    """Send one SMS via the Semaphore HTTP API. Returns (success, error)."""
+    import json
+    import urllib.request, urllib.parse, urllib.error
+    if not (SEMAPHORE_ENABLED and SEMAPHORE_API_KEY):
+        return False, "Semaphore not configured"
+    fields = {
+        "apikey":  SEMAPHORE_API_KEY,
+        "number":  _ph_local(phone),
+        "message": message,
+    }
+    if SEMAPHORE_SENDER:
+        fields["sendername"] = SEMAPHORE_SENDER
+    data = urllib.parse.urlencode(fields).encode()
+    req = urllib.request.Request(SEMAPHORE_API_URL, data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = r.read().decode(errors="ignore")
+        arr = json.loads(body)
+        # Success: a JSON array of message objects each carrying a message_id.
+        if isinstance(arr, list) and arr and arr[0].get("message_id"):
+            status = arr[0].get("status", "")
+            logger.info(f"SMS sent via Semaphore to {phone} (status={status})")
+            return True, ""
+        return False, f"Semaphore: unexpected response {body[:160]}"
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="ignore")[:160] if hasattr(e, "read") else ""
+        return False, f"Semaphore HTTP {e.code}: {detail}"
+    except Exception as e:
+        return False, f"Semaphore error: {e}"
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def send_sms(phone: str, message: str) -> SMSResult:
@@ -444,18 +497,28 @@ def send_sms(phone: str, message: str) -> SMSResult:
     logger.warning(f"Primary modem failed: {primary_err}. Trying fallback...")
 
     # ── Try secondary (fallback) ──────────────────────────────────────────────
-    if not GSM_FALLBACK_ENABLED:
-        return SMSResult(success=False, modem_used=None, error=primary_err)
+    gsm_err = primary_err
+    if GSM_FALLBACK_ENABLED:
+        ok, err = _try_send(GSM_SECONDARY, phone, message)
+        if ok:
+            logger.info(f"Fallback modem succeeded.")
+            return SMSResult(success=True, modem_used=GSM_SECONDARY["label"], error="")
+        gsm_err = f"Primary: {primary_err} | Fallback: {err}"
 
-    ok, err = _try_send(GSM_SECONDARY, phone, message)
-    if ok:
-        logger.info(f"Fallback modem succeeded.")
-        return SMSResult(success=True, modem_used=GSM_SECONDARY["label"], error="")
+    # ── Online fallback: Semaphore HTTP API ───────────────────────────────────
+    # The GSM modem is unreliable (flaky SIM holder), so when it fails we send
+    # over the internet via Semaphore instead.
+    if SEMAPHORE_ENABLED and SEMAPHORE_API_KEY:
+        logger.warning(f"GSM failed ({gsm_err}). Trying Semaphore HTTP API...")
+        ok, sem_err = _send_via_semaphore(phone, message)
+        if ok:
+            return SMSResult(success=True, modem_used="Semaphore", error="")
+        combined = f"GSM[{gsm_err}] | Semaphore[{sem_err}]"
+        logger.error(f"All SMS channels failed for {phone}: {combined}")
+        return SMSResult(success=False, modem_used=None, error=combined)
 
-    # ── Both failed ───────────────────────────────────────────────────────────
-    combined = f"Primary: {primary_err} | Fallback: {err}"
-    logger.error(f"Both modems failed for {phone}: {combined}")
-    return SMSResult(success=False, modem_used=None, error=combined)
+    logger.error(f"GSM failed for {phone}: {gsm_err}")
+    return SMSResult(success=False, modem_used=None, error=gsm_err)
 
 
 def _parse_signal(raw: str) -> tuple[Optional[int], str]:
