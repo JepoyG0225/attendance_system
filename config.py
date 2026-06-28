@@ -61,6 +61,15 @@ SEMAPHORE_API_KEY  = "aef206109fe75b5278c86eb2ad586ede"
 SEMAPHORE_SENDER   = "SJAC"
 SEMAPHORE_API_URL  = "https://api.semaphore.co/api/v4/messages"
 
+# ── OneWaySMS HTTP API (online fallback — primary online channel) ─────────────
+# Works now (sender "SJAC" accepted, no approval needed). Uses the HTTPS/port-443
+# endpoint so it works even if the data center blocks port 10001.
+ONEWAYSMS_ENABLED = True
+ONEWAYSMS_USER    = "APIUZHF1GEDWV"
+ONEWAYSMS_PASS    = "APIUZHF1GEDWVUZHF1"
+ONEWAYSMS_SENDER  = "SJAC"
+ONEWAYSMS_API_URL = "https://sgateway.onewaysms.com/apis10.aspx"
+
 # ── SMS message templates ─────────────────────────────────────────────────────
 # Placeholders: {student_name} {grade} {section} {time} {date} {school}
 

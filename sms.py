@@ -42,6 +42,17 @@ except ImportError:
     SEMAPHORE_API_KEY = ""
     SEMAPHORE_SENDER = ""
     SEMAPHORE_API_URL = "https://api.semaphore.co/api/v4/messages"
+try:
+    from config import (
+        ONEWAYSMS_ENABLED, ONEWAYSMS_USER, ONEWAYSMS_PASS,
+        ONEWAYSMS_SENDER, ONEWAYSMS_API_URL,
+    )
+except ImportError:
+    ONEWAYSMS_ENABLED = False
+    ONEWAYSMS_USER = ""
+    ONEWAYSMS_PASS = ""
+    ONEWAYSMS_SENDER = "SJAC"
+    ONEWAYSMS_API_URL = "https://sgateway.onewaysms.com/apis10.aspx"
 
 logger = logging.getLogger(__name__)
 _MODEM_IO_LOCK = threading.Lock()
@@ -439,6 +450,46 @@ def _ph_local(phone: str) -> str:
     return p
 
 
+def _ph_intl(phone: str) -> str:
+    """Normalise a PH number to international form without '+' (639xxxxxxxxx)."""
+    p = (phone or "").strip().replace(" ", "").replace("-", "").replace("+", "")
+    if p.startswith("0"):
+        p = "63" + p[1:]
+    elif not p.startswith("63"):
+        p = "63" + p
+    return p
+
+
+def _send_via_onewaysms(phone: str, message: str) -> tuple[bool, str]:
+    """Send one SMS via the OneWaySMS HTTP API. Returns (success, error).
+    OneWaySMS returns a positive MTID on success, or a negative error code."""
+    import urllib.request, urllib.parse, urllib.error
+    if not (ONEWAYSMS_ENABLED and ONEWAYSMS_USER):
+        return False, "OneWaySMS not configured"
+    params = urllib.parse.urlencode({
+        "apiusername":  ONEWAYSMS_USER,
+        "apipassword":  ONEWAYSMS_PASS,
+        "mobileno":     _ph_intl(phone),
+        "senderid":     ONEWAYSMS_SENDER,
+        "languagetype": "1",
+        "message":      message,
+    })
+    url = f"{ONEWAYSMS_API_URL}?{params}"
+    try:
+        with urllib.request.urlopen(url, timeout=20) as r:
+            resp = r.read().decode(errors="ignore").strip()
+        try:
+            mtid = int(resp.split()[0]) if resp else -999
+        except ValueError:
+            mtid = -999
+        if mtid > 0:
+            logger.info(f"SMS sent via OneWaySMS to {phone} (MTID={mtid})")
+            return True, ""
+        return False, f"OneWaySMS error code: {resp or 'empty'}"
+    except Exception as e:
+        return False, f"OneWaySMS error: {e}"
+
+
 def _send_via_semaphore(phone: str, message: str) -> tuple[bool, str]:
     """Send one SMS via the Semaphore HTTP API. Returns (success, error)."""
     import json
@@ -505,20 +556,27 @@ def send_sms(phone: str, message: str) -> SMSResult:
             return SMSResult(success=True, modem_used=GSM_SECONDARY["label"], error="")
         gsm_err = f"Primary: {primary_err} | Fallback: {err}"
 
-    # ── Online fallback: Semaphore HTTP API ───────────────────────────────────
-    # The GSM modem is unreliable (flaky SIM holder), so when it fails we send
-    # over the internet via Semaphore instead.
+    # ── Online fallbacks (GSM modem is unreliable: flaky SIM holder) ──────────
+    # Try OneWaySMS first (works now), then Semaphore as a last resort.
+    errors = [f"GSM[{gsm_err}]"]
+
+    if ONEWAYSMS_ENABLED and ONEWAYSMS_USER:
+        logger.warning(f"GSM failed ({gsm_err}). Trying OneWaySMS...")
+        ok, ow_err = _send_via_onewaysms(phone, message)
+        if ok:
+            return SMSResult(success=True, modem_used="OneWaySMS", error="")
+        errors.append(f"OneWaySMS[{ow_err}]")
+
     if SEMAPHORE_ENABLED and SEMAPHORE_API_KEY:
-        logger.warning(f"GSM failed ({gsm_err}). Trying Semaphore HTTP API...")
+        logger.warning("Trying Semaphore HTTP API...")
         ok, sem_err = _send_via_semaphore(phone, message)
         if ok:
             return SMSResult(success=True, modem_used="Semaphore", error="")
-        combined = f"GSM[{gsm_err}] | Semaphore[{sem_err}]"
-        logger.error(f"All SMS channels failed for {phone}: {combined}")
-        return SMSResult(success=False, modem_used=None, error=combined)
+        errors.append(f"Semaphore[{sem_err}]")
 
-    logger.error(f"GSM failed for {phone}: {gsm_err}")
-    return SMSResult(success=False, modem_used=None, error=gsm_err)
+    combined = " | ".join(errors)
+    logger.error(f"All SMS channels failed for {phone}: {combined}")
+    return SMSResult(success=False, modem_used=None, error=combined)
 
 
 def _parse_signal(raw: str) -> tuple[Optional[int], str]:
