@@ -70,6 +70,13 @@ ONEWAYSMS_PASS    = "APIUZHF1GEDWVUZHF1"
 ONEWAYSMS_SENDER  = "SJAC"
 ONEWAYSMS_API_URL = "https://sgateway.onewaysms.com/apis10.aspx"
 
+# ── smsapiph (FREE SMS API) — primary channel ─────────────────────────────────
+# Free SMS API for PH numbers (https://smsapiph.netlify.app). Tried first since
+# it's free; GSM/OneWaySMS/Semaphore act as fallbacks if it's ever unavailable.
+SMSAPIPH_ENABLED = True
+SMSAPIPH_API_KEY = "sk-2b10k8zihqxqa9z0jzh5ixsmxe99ofp5"
+SMSAPIPH_API_URL = "https://smsapiph.onrender.com/api/v1/send/sms"
+
 # ── SMS message templates ─────────────────────────────────────────────────────
 # Placeholders: {student_name} {grade} {section} {time} {date} {school}
 

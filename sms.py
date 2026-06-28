@@ -53,6 +53,12 @@ except ImportError:
     ONEWAYSMS_PASS = ""
     ONEWAYSMS_SENDER = "SJAC"
     ONEWAYSMS_API_URL = "https://sgateway.onewaysms.com/apis10.aspx"
+try:
+    from config import SMSAPIPH_ENABLED, SMSAPIPH_API_KEY, SMSAPIPH_API_URL
+except ImportError:
+    SMSAPIPH_ENABLED = False
+    SMSAPIPH_API_KEY = ""
+    SMSAPIPH_API_URL = "https://smsapiph.onrender.com/api/v1/send/sms"
 
 logger = logging.getLogger(__name__)
 _MODEM_IO_LOCK = threading.Lock()
@@ -490,6 +496,33 @@ def _send_via_onewaysms(phone: str, message: str) -> tuple[bool, str]:
         return False, f"OneWaySMS error: {e}"
 
 
+def _send_via_smsapiph(phone: str, message: str) -> tuple[bool, str]:
+    """Send one SMS via the free smsapiph HTTP API. Returns (success, error)."""
+    import json
+    import urllib.request, urllib.error
+    if not (SMSAPIPH_ENABLED and SMSAPIPH_API_KEY):
+        return False, "smsapiph not configured"
+    payload = json.dumps({"recipient": _ph_local(phone), "message": message}).encode()
+    req = urllib.request.Request(
+        SMSAPIPH_API_URL, data=payload, method="POST",
+        headers={"x-api-key": SMSAPIPH_API_KEY, "Content-Type": "application/json"},
+    )
+    try:
+        # generous timeout: the free host can cold-start (~30-60s) after idle.
+        with urllib.request.urlopen(req, timeout=45) as r:
+            body = r.read().decode(errors="ignore")
+        data = json.loads(body)
+        if data.get("success"):
+            logger.info(f"SMS sent via smsapiph to {phone}")
+            return True, ""
+        return False, f"smsapiph: {data.get('message', 'unknown')}"
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="ignore")[:160] if hasattr(e, "read") else ""
+        return False, f"smsapiph HTTP {e.code}: {detail}"
+    except Exception as e:
+        return False, f"smsapiph error: {e}"
+
+
 def _send_via_semaphore(phone: str, message: str) -> tuple[bool, str]:
     """Send one SMS via the Semaphore HTTP API. Returns (success, error)."""
     import json
@@ -537,42 +570,41 @@ def send_sms(phone: str, message: str) -> SMSResult:
         logger.info(f"[SIM] SMS to {phone}")
         return SMSResult(success=True, modem_used="Simulation", error="")
 
-    _resolve_modem_ports()
+    errors = []
 
-    # ── Try primary ───────────────────────────────────────────────────────────
+    # ── 1. smsapiph (FREE) — primary channel ──────────────────────────────────
+    if SMSAPIPH_ENABLED and SMSAPIPH_API_KEY:
+        ok, err = _send_via_smsapiph(phone, message)
+        if ok:
+            return SMSResult(success=True, modem_used="smsapiph", error="")
+        errors.append(f"smsapiph[{err}]")
+        logger.warning(f"smsapiph failed ({err}). Trying GSM modem...")
+
+    # ── 2. GSM modem (primary + secondary) ────────────────────────────────────
+    _resolve_modem_ports()
     ok, err = _try_send(GSM_PRIMARY, phone, message)
     if ok:
         return SMSResult(success=True, modem_used=GSM_PRIMARY["label"], error="")
-
-    primary_err = err
-    logger.warning(f"Primary modem failed: {primary_err}. Trying fallback...")
-
-    # ── Try secondary (fallback) ──────────────────────────────────────────────
-    gsm_err = primary_err
+    errors.append(f"GSM-primary[{err}]")
     if GSM_FALLBACK_ENABLED:
         ok, err = _try_send(GSM_SECONDARY, phone, message)
         if ok:
-            logger.info(f"Fallback modem succeeded.")
             return SMSResult(success=True, modem_used=GSM_SECONDARY["label"], error="")
-        gsm_err = f"Primary: {primary_err} | Fallback: {err}"
+        errors.append(f"GSM-fallback[{err}]")
 
-    # ── Online fallbacks (GSM modem is unreliable: flaky SIM holder) ──────────
-    # Try OneWaySMS first (works now), then Semaphore as a last resort.
-    errors = [f"GSM[{gsm_err}]"]
-
+    # ── 3. OneWaySMS (paid) ───────────────────────────────────────────────────
     if ONEWAYSMS_ENABLED and ONEWAYSMS_USER:
-        logger.warning(f"GSM failed ({gsm_err}). Trying OneWaySMS...")
-        ok, ow_err = _send_via_onewaysms(phone, message)
+        ok, err = _send_via_onewaysms(phone, message)
         if ok:
             return SMSResult(success=True, modem_used="OneWaySMS", error="")
-        errors.append(f"OneWaySMS[{ow_err}]")
+        errors.append(f"OneWaySMS[{err}]")
 
+    # ── 4. Semaphore (paid, last resort) ──────────────────────────────────────
     if SEMAPHORE_ENABLED and SEMAPHORE_API_KEY:
-        logger.warning("Trying Semaphore HTTP API...")
-        ok, sem_err = _send_via_semaphore(phone, message)
+        ok, err = _send_via_semaphore(phone, message)
         if ok:
             return SMSResult(success=True, modem_used="Semaphore", error="")
-        errors.append(f"Semaphore[{sem_err}]")
+        errors.append(f"Semaphore[{err}]")
 
     combined = " | ".join(errors)
     logger.error(f"All SMS channels failed for {phone}: {combined}")
