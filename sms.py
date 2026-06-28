@@ -482,8 +482,19 @@ def _send_via_onewaysms(phone: str, message: str) -> tuple[bool, str]:
     })
     url = f"{ONEWAYSMS_API_URL}?{params}"
     try:
-        with urllib.request.urlopen(url, timeout=20) as r:
-            resp = r.read().decode(errors="ignore").strip()
+        import ssl
+        try:
+            with urllib.request.urlopen(url, timeout=20) as r:
+                resp = r.read().decode(errors="ignore").strip()
+        except urllib.error.URLError as e:
+            # Some PH SMS gateways present a cert chain the (offline) server's
+            # Python CA store can't verify — retry without verification.
+            if "CERTIFICATE_VERIFY" in str(e):
+                ctx = ssl._create_unverified_context()
+                with urllib.request.urlopen(url, timeout=20, context=ctx) as r:
+                    resp = r.read().decode(errors="ignore").strip()
+            else:
+                raise
         try:
             mtid = int(resp.split()[0]) if resp else -999
         except ValueError:
@@ -496,9 +507,11 @@ def _send_via_onewaysms(phone: str, message: str) -> tuple[bool, str]:
         return False, f"OneWaySMS error: {e}"
 
 
-def _send_via_smsapiph(phone: str, message: str) -> tuple[bool, str]:
-    """Send one SMS via the free smsapiph HTTP API. Returns (success, error)."""
-    import json
+def _send_via_smsapiph(phone: str, message: str, _retries: int = 2) -> tuple[bool, str]:
+    """Send one SMS via the free smsapiph HTTP API. Returns (success, error).
+    smsapiph enforces ~2s between messages (HTTP 429) — we honour retryAfter and
+    retry so school-time bursts aren't dropped."""
+    import json, time
     import urllib.request, urllib.error
     if not (SMSAPIPH_ENABLED and SMSAPIPH_API_KEY):
         return False, "smsapiph not configured"
@@ -509,7 +522,7 @@ def _send_via_smsapiph(phone: str, message: str) -> tuple[bool, str]:
     )
     try:
         # generous timeout: the free host can cold-start (~30-60s) after idle.
-        with urllib.request.urlopen(req, timeout=45) as r:
+        with urllib.request.urlopen(req, timeout=60) as r:
             body = r.read().decode(errors="ignore")
         data = json.loads(body)
         if data.get("success"):
@@ -517,7 +530,15 @@ def _send_via_smsapiph(phone: str, message: str) -> tuple[bool, str]:
             return True, ""
         return False, f"smsapiph: {data.get('message', 'unknown')}"
     except urllib.error.HTTPError as e:
-        detail = e.read().decode(errors="ignore")[:160] if hasattr(e, "read") else ""
+        detail = e.read().decode(errors="ignore")[:200] if hasattr(e, "read") else ""
+        if e.code == 429 and _retries > 0:
+            wait = 2
+            try:
+                wait = int(json.loads(detail).get("retryAfter", 2))
+            except Exception:
+                pass
+            time.sleep(wait + 0.5)
+            return _send_via_smsapiph(phone, message, _retries - 1)
         return False, f"smsapiph HTTP {e.code}: {detail}"
     except Exception as e:
         return False, f"smsapiph error: {e}"
